@@ -1,0 +1,6 @@
+# FreeHop: passwordless sudo for network namespace / WireGuard / NAT.
+# Install with: sudo cp sudoers/freehop /etc/sudoers.d/freehop && sudo chmod 440 /etc/sudoers.d/freehop
+# NOTE: the `ip` binary is broad by necessity (netns, link, addr, route).
+# This grants the user root-level network configuration; only install it
+# on a machine you control, for a user you trust (yourself).
+%USER% ALL=(root) NOPASSWD: /usr/sbin/ip, /usr/sbin/iptables, /usr/bin/wg, /usr/sbin/sysctl -w net.ipv4.ip_forward=1, /usr/bin/pkill -f freehop-agent.py, /usr/bin/tee -a /etc/hosts, /usr/bin/tee /etc/netns/*/resolv.conf, /usr/bin/sed -i /# freehop-agent-scoped/d /etc/hosts

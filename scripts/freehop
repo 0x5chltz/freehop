@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# FreeHop CLI: status, rotate, doctor, logs.
+# Usage: freehop status|rotate [--dry-run]|doctor|logs|setup|teardown|help
+set -euo pipefail
+PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
+CONFIG="${FREEHOP_CONFIG:-$HOME/.config/freehop/config}"
+NETNS="freehop"; NS_IP="10.200.0.2"; PROXY_PORT="18080"; STATE_DIR="$HOME/.local/share/freehop"
+WG_IF="freehop0"; KEYRING_GLOB="$HOME/.config/Proton/keyring-proton-sso-account-*.json"
+WATCH_UNIT=""; TEST_CMD=""
+if [ -f "$CONFIG" ]; then set -a; . "$CONFIG"; set +a; fi
+
+cmd_status() {
+  echo "== FreeHop status =="
+  "$PREFIX/scripts/freehop-netns.sh" status
+  echo -n "proxy $NS_IP:$PROXY_PORT: "
+  if curl -s -m 5 -x "http://$NS_IP:$PROXY_PORT" -o /dev/null -w "%{http_code}" https://www.google.com/ 2>/dev/null | grep -qx 200; then
+    echo "200 OK"
+  else
+    echo "unreachable"
+  fi
+  echo "units:"
+  systemctl --user is-active freehop-proxy.service freehop-watch.timer 2>/dev/null | paste -d' ' <(echo -e "proxy\nwatch.timer") - || true
+  if [ -f "$STATE_DIR/rotate-state.json" ]; then
+    echo "last rotate: $(python3 -c "import json; d=json.load(open('$STATE_DIR/rotate-state.json')); print(d.get('server'), d.get('exit_ip'))" 2>/dev/null)"
+  fi
+}
+
+cmd_doctor() {
+  ok=0; fail=0
+  check() { if eval "$2" >/dev/null 2>&1; then echo "[ok]   $1"; ok=$((ok+1)); else echo "[FAIL] $1"; fail=$((fail+1)); fi; }
+  check "python3" "command -v python3"
+  check "wg" "command -v wg"
+  check "ip (iproute2)" "command -v ip"
+  check "iptables" "command -v iptables"
+  check "curl" "command -v curl"
+  check "proton vpn library" "python3 -c \"import sys; sys.path.insert(0,'/usr/lib/python3/dist-packages'); import proton.vpn\""
+  check "passwordless sudo" "sudo -n true"
+  check "proton keyring present" "ls $KEYRING_GLOB >/dev/null 2>&1"
+  check "certificate fetched" "test -f $STATE_DIR/cert.json"
+  check "netns exists" "sudo -n ip netns list 2>/dev/null | awk '{print \$1}' | grep -qx $NETNS"
+  check "wg interface up" "sudo -n ip netns exec $NETNS ip link show $WG_IF 2>/dev/null | grep -q UP"
+  check "wg handshake recent" "sudo -n ip netns exec $NETNS wg show $WG_IF 2>/dev/null | grep -q 'latest handshake'"
+  check "inside-ns egress" "sudo -n ip netns exec $NETNS curl -s -m 10 -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200"
+  check "proxy egress" "curl -s -m 10 -x http://$NS_IP:$PROXY_PORT -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200"
+  check "proxy unit active" "systemctl --user is-active -q freehop-proxy.service"
+  check "watch timer active" "systemctl --user is-active -q freehop-watch.timer"
+  if [ -n "$TEST_CMD" ]; then check "test command" "$TEST_CMD"; fi
+  echo "doctor: $ok ok, $fail failed"
+  [ "$fail" -eq 0 ]
+}
+
+cmd_logs() {
+  tail -n 50 "$STATE_DIR/watch.log" 2>/dev/null || echo "no watch log yet"
+  echo "--- proxy unit ---"
+  systemctl --user status freehop-proxy.service --no-pager 2>/dev/null | head -20 || true
+}
+
+case "${1:-help}" in
+  status) cmd_status ;;
+  rotate) shift; python3 "$PREFIX/src/freehop-rotate.py" "$@" ;;
+  doctor) cmd_doctor ;;
+  logs) cmd_logs ;;
+  setup) "$PREFIX/scripts/freehop-netns.sh" setup ;;
+  teardown) "$PREFIX/scripts/freehop-netns.sh" teardown ;;
+  help|*) echo "usage: freehop status|rotate [--dry-run]|doctor|logs|setup|teardown" ;;
+esac

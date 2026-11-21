@@ -1,0 +1,13 @@
+[Unit]
+Description=FreeHop boot setup: build the scoped netns and pick a fresh Proton exit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.local/share/freehop/scripts/freehop-netns.sh setup
+ExecStart=/usr/bin/python3 %h/.local/share/freehop/src/freehop-rotate.py
+
+[Install]
+WantedBy=default.target

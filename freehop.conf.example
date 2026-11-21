@@ -1,0 +1,48 @@
+# FreeHop configuration. Copy to ~/.config/freehop/config and edit.
+# All paths accept ~ and $HOME. Only the values you set here are used;
+# no credentials are ever stored in this file. The Proton keyring and
+# certificate stay where the Proton client and FreeHop put them.
+
+# Network namespace and WireGuard interface (scoped, host traffic untouched)
+NETNS=freehop
+WG_IF=freehop0
+VETH_HOST=veth-fh
+VETH_NS=veth-ns
+SUBNET=10.200.0.0/24
+HOST_IP=10.200.0.1
+NS_IP=10.200.0.2
+WG_ADDR=10.2.0.2/32
+PROXY_PORT=18080
+
+# Where FreeHop keeps its state (cert, logicals, rotate state, wg key).
+# Must survive reboots, so NOT /tmp.
+STATE_DIR=~/.local/share/freehop
+# Where the scripts live (set by install.sh).
+PREFIX=~/.local/share/freehop
+
+# Proton account. The keyring is created when you log in once with the
+# official Proton VPN client; FreeHop only reads it, never writes it.
+KEYRING_GLOB=~/.config/Proton/keyring-proton-sso-account-*.json
+
+# Watch: which journal unit and pattern mean "free limit hit".
+# Leave WATCH_UNIT empty to skip the 429 check and only use the tunnel
+# health check.
+WATCH_UNIT=
+WATCH_PATTERN=FreeUsageLimitError
+WATCH_SINCE=10 minutes ago
+
+# Command run after a successful rotate (e.g. restart your gateway so it
+# drops its cached session). Leave empty for none.
+POST_ROTATE_HOOK=
+
+# Command whose exit code 0 means "the gateway works again" after a rotate.
+# Leave empty to trust a successful rotate alone.
+# Example for a 9Router gateway (reads its key from its own DB, key never printed):
+# TEST_CMD=python3 ~/.local/share/freehop/examples/test-9router.py
+TEST_CMD=
+
+# Rotate limits (same shape as the production setup that ran this nightly)
+MIN_INTERVAL_MIN=10
+MAX_PER_HOUR=6
+MAX_PER_DAY=20
+MAX_CONSEC_FAIL=3
