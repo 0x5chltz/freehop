@@ -10,7 +10,7 @@ FreeHop is the packaged version of a setup that ran a shared AI gateway for week
 your gateway ──HTTP_PROXY──> [forward proxy 10.200.0.2:18080]
                                   inside netns "freehop"
                                       │
-                                 WireGuard proton0 ──> Proton Free exit (rotates)
+                                 WireGuard freehop0 ──> Proton Free exit (rotates)
 ```
 
 - **Scoped tunnel.** The WireGuard interface lives in a network namespace with its own veth pair and NAT. Only traffic pointed at the proxy uses the VPN. The host keeps its normal connection, SSH stays put.
