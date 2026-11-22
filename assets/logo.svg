@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="FreeHop logo">
+  <title>FreeHop</title>
+  <!-- Mark: one trajectory hopping through three exits. The middle exit
+       sits on the arc's peak, so the curve reads as a route, not an arch.
+       Emerald tile, white mark. Reads at 16px and at 256px. -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#10B981"/>
+  <path d="M 52 184 Q 128 40 204 184" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="52" cy="184" r="17" fill="#FFFFFF"/>
+  <circle cx="128" cy="112" r="17" fill="#FFFFFF"/>
+  <circle cx="204" cy="184" r="17" fill="#FFFFFF"/>
+</svg>

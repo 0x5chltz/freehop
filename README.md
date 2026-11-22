@@ -1,4 +1,11 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="FreeHop logo" width="128" height="128">
+</p>
+
 # FreeHop
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-v0.2.1-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -41,10 +48,10 @@ We tested WARP first (Cloudflare's egress is what openhop hops). Both WARP exit 
 ```bash
 git clone https://github.com/Urdemonlord/freehop.git
 cd freehop
-./install.sh
+./install.sh --yes
 ```
 
-The installer checks the tools, the Proton library, the keyring, and passwordless sudo, then installs to `~/.local/share/freehop`, writes `~/.config/freehop/config` (from `freehop.conf.example` if missing), enables the units, builds the namespace, and runs a first rotate.
+The installer checks the tools, the Proton library, the keyring, and passwordless sudo, then installs to `~/.local/share/freehop`, writes `~/.config/freehop/config` (from `freehop.conf.example` if missing), enables the units, builds the namespace, and runs a first rotate. It never prompts; `--yes` is for scripted installs. The installer links `freehop` into `~/.local/bin`, so make sure that is on your PATH.
 
 Passwordless sudo is needed because the tunnel is built with `ip netns`, `wg`, and `iptables`. Add this file, replacing `%USER%` with your username:
 
@@ -83,12 +90,14 @@ Point your gateway at the proxy with `HTTP_PROXY=http://10.200.0.2:18080` (and `
 ## Commands
 
 ```bash
-freehop status          # netns, exit IP, proxy, units, last rotate
-freehop rotate          # rotate now
-freehop rotate --dry-run  # show which server would be picked, change nothing
-freehop doctor          # deps, keyring, cert, tunnel, proxy, units
-freehop logs            # watcher log tail + proxy unit status
+freehop status [--json]           # netns, exit IP, proxy, units, last rotate
+freehop rotate [--dry-run|--json] # rotate now; --dry-run changes nothing
+freehop doctor [--json]           # deps, keyring, cert, tunnel, proxy, units
+freehop logs                      # watcher log tail + proxy unit status
+freehop mcp                       # print the MCP client config for this machine
 ```
+
+`--json` prints one JSON object on stdout (progress goes to stderr). Exit 0 means ok, 1 means failed, 2 means usage error.
 
 ## AI agents
 
