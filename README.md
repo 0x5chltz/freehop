@@ -5,9 +5,11 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.3.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.3.3-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
+
+Built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`).
 
 FreeHop is the packaged version of a setup that ran a shared AI gateway for weeks: a scoped WireGuard tunnel in its own network namespace, a forward proxy that routes only the gateway's traffic through it, and a watcher that rotates to a fresh Proton Free exit the moment the provider answers 429, or the tunnel itself dies. It is the server-side cousin of [openhop](https://openhop.cfd), which does the same idea per-machine for OpenCode with Cloudflare WARP.
 

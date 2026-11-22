@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.3 (2026-11-22)
+
+- The 9Router + OpenCode stack is now named everywhere: README intro, skill file description and intro, and the GitHub repo description and topics.
+
 ## v0.3.2 (2026-11-22)
 
 - README setup prompt now names the stack it is built for: 9Router serving the OpenCode provider's `combos` model, with the concrete config instead of a generic gateway placeholder.

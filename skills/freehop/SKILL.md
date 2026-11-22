@@ -1,11 +1,11 @@
 ---
 name: freehop
-description: Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits. Use when a gateway returns 429 FreeUsageLimitError, the tunnel is dead, or you need to check, rotate, or troubleshoot the Proton exit. Covers install, status, rotate, doctor, and troubleshooting. Does not cover general VPN use or other providers.
+description: Keep a 9Router gateway serving the OpenCode provider's combos model alive by hopping Proton VPN exits when the free limit hits. Use when a gateway returns 429 FreeUsageLimitError, the tunnel is dead, or you need to check, rotate, or troubleshoot the Proton exit. Covers install, status, rotate, doctor, and troubleshooting. Does not cover general VPN use or other providers.
 ---
 
 # FreeHop
 
-FreeHop keeps a free-tier AI gateway answering by rotating Proton Free VPN exits. A scoped WireGuard tunnel lives in its own network namespace, a forward proxy routes only the gateway's traffic through it, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. Server-side, Linux only, no GUI.
+FreeHop keeps a free-tier AI gateway answering by rotating Proton Free VPN exits. It is built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`). A scoped WireGuard tunnel lives in its own network namespace, a forward proxy routes only the gateway's traffic through it, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. Server-side, Linux only, no GUI.
 
 ## When to use it
 
