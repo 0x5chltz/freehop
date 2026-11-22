@@ -5,7 +5,7 @@
  "pdfCompatible": true,
  "pdf": {
   "mime": "application/pdf",
-  "data": "JVBERi0xLjcKJYCAgIAKCjEgMCBvYmoKPDwvVHlwZS9QYWdlcy9Db3VudCAxL0tpZHNbMyAwIFJdPj4KZW5kb2JqCjIgMCBvYmoKPDwvUHJvY1NldFsvUERGL1RleHQvSW1hZ2VDL0ltYWdlQl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUmVzb3VyY2VzIDIgMCBSL01lZGlhQm94WzAgMCAyNTYgMjU2XS9CbGVlZEJveFswIDAgMjU2IDI1Nl0vVHJpbUJveFswIDAgMjU2IDI1Nl0vUGFyZW50IDEgMCBSL0NvbnRlbnRzIDQgMCBSPj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDMyNy9GaWx0ZXIvRmxhdGVEZWNvZGU+PgpzdHJlYW0KeJyNUjFOBDEM7PcV8wEi23Gc5AVIdMATInEUewXX8H1kZ+8uQgjQFh4nnrE92Q8wCIQHD1IM4wxKZFK1MChVKdpJQKlQaU0UlxNM0XAGd0HDDhFJXWovaBBtyDlRFSoWmSlGAC/fA90JCzoqPA4nOdi/aa3UWT4QHXasbe8oLhvG9r69bc/bxw/bcnwvj2DFJxhPKAI29QVJklVYA5eccnYkpHE7ttdfBS8n5Fl5DlA0uYEVKhMYWC16qfnGnLoyi0ZeaWF4Ei46qDnq8kpoEjrN7Vjkm0TnG+OY528zLicwGbqEB4baU9NeFczlQD6KNA8DrJS4kMxJCy31hVxlBGDSKLOFwKyh43Es8nFOtnLmQP8bvtn1BR3djOR+Q2rzJcN74atFcS6ycCKb/7Cjm5kLp8nUCv+XHs3fxBbOda5jiS/Srq2NCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PC9UaXRsZShGcmVlSG9wKS9DcmVhdG9yKFZlY3RvckNyYWZ0KS9Qcm9kdWNlcihWZWN0b3JDcmFmdCkvTW9kRGF0ZShEOjIwMjYxMTIyMDU1OTE4WikvQ3JlYXRpb25EYXRlKEQ6MjAyNjExMjIwNTU5MThaKT4+CmVuZG9iago2IDAgb2JqCjw8L0xlbmd0aCAxMDU3L1R5cGUvTWV0YWRhdGEvU3VidHlwZS9YTUw+PgpzdHJlYW0KPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz48eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJ4bXAtd3JpdGVyIj48cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPjxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgIHhtbG5zOnhtcD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLyIgIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIiAgeG1sbnM6eG1wVFBnPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvdC9wZy8iICB4bWxuczpwZGY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vcGRmLzEuMy8iID48ZGM6dGl0bGU+PHJkZjpBbHQ+PHJkZjpsaSB4bWw6bGFuZz0ieC1kZWZhdWx0Ij5GcmVlSG9wPC9yZGY6bGk+PC9yZGY6QWx0PjwvZGM6dGl0bGU+PHhtcDpDcmVhdG9yVG9vbD5WZWN0b3JDcmFmdDwveG1wOkNyZWF0b3JUb29sPjxwZGY6UHJvZHVjZXI+VmVjdG9yQ3JhZnQ8L3BkZjpQcm9kdWNlcj48eG1wOk1vZGlmeURhdGU+MjAyNi0xMS0yMlQwNTo1OToxOCswMDowMDwveG1wOk1vZGlmeURhdGU+PHhtcDpDcmVhdGVEYXRlPjIwMjYtMTEtMjJUMDU6NTk6MTgrMDA6MDA8L3htcDpDcmVhdGVEYXRlPjx4bXBUUGc6TlBhZ2VzPjE8L3htcFRQZzpOUGFnZXM+PGRjOmZvcm1hdD5hcHBsaWNhdGlvbi9wZGY8L2RjOmZvcm1hdD48eG1wTU06SW5zdGFuY2VJRD5HdHdTMktZNjY1RXEyWlRmUCtCTTRRPT08L3htcE1NOkluc3RhbmNlSUQ+PHhtcE1NOkRvY3VtZW50SUQ+R3R3UzJLWTY2NUVxMlpUZlArQk00UT09PC94bXBNTTpEb2N1bWVudElEPjx4bXBNTTpSZW5kaXRpb25DbGFzcz5kZWZhdWx0PC94bXBNTTpSZW5kaXRpb25DbGFzcz48cGRmOlBERlZlcnNpb24+MS43PC9wZGY6UERGVmVyc2lvbj48L3JkZjpEZXNjcmlwdGlvbj48L3JkZjpSREY+PC94OnhtcG1ldGE+PD94cGFja2V0IGVuZD0iciI/PgplbmRzdHJlYW0KZW5kb2JqCjcgMCBvYmoKPDwvVmlld2VyUHJlZmVyZW5jZXM8PC9EaXNwbGF5RG9jVGl0bGUgdHJ1ZT4+L1R5cGUvQ2F0YWxvZy9QYWdlcyAxIDAgUi9NZXRhZGF0YSA2IDAgUj4+CmVuZG9iagp4cmVmCjAgOAowMDAwMDAwMDAwIDY1NTM1IGYNCjAwMDAwMDAwMTYgMDAwMDAgbg0KMDAwMDAwMDA2NyAwMDAwMCBuDQowMDAwMDAwMTIwIDAwMDAwIG4NCjAwMDAwMDAyNTkgMDAwMDAgbg0KMDAwMDAwMDY1NCAwMDAwMCBuDQowMDAwMDAwNzkxIDAwMDAwIG4NCjAwMDAwMDE5MjQgMDAwMDAgbg0KdHJhaWxlcgo8PC9TaXplIDgvUm9vdCA3IDAgUi9JbmZvIDUgMCBSL0lEWyhHdHdTMktZNjY1RXEyWlRmUCtCTTRRPT0pKEd0d1MyS1k2NjVFcTJaVGZQK0JNNFE9PSldPj4Kc3RhcnR4cmVmCjIwMjcKJSVFT0Y="
+  "data": "JVBERi0xLjcKJYCAgIAKCjEgMCBvYmoKPDwvVHlwZS9QYWdlcy9Db3VudCAxL0tpZHNbMyAwIFJdPj4KZW5kb2JqCjIgMCBvYmoKPDwvUHJvY1NldFsvUERGL1RleHQvSW1hZ2VDL0ltYWdlQl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUmVzb3VyY2VzIDIgMCBSL01lZGlhQm94WzAgMCAyNTYgMjU2XS9CbGVlZEJveFswIDAgMjU2IDI1Nl0vVHJpbUJveFswIDAgMjU2IDI1Nl0vUGFyZW50IDEgMCBSL0NvbnRlbnRzIDQgMCBSPj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDI5Mi9GaWx0ZXIvRmxhdGVEZWNvZGU+PgpzdHJlYW0KeJytUTFuxDAM2+8V/EANSbFs+Rl9g4FeB99w9/+hkGInadGlQJGBFExKovIEg0B4cxAt6A9QoiI1K4NSFc2NBJSU1EwyXneUDMMD3ASGARFJTWpTGCQbti1RFdISVcnoQVw+gp2GC5sKx+4mJ+NHr6t1l3fEhIHr2JPFo6HfPm8ft/fb85e0HN/rDmMUj7XjgFni2qoXLaNuyYQ2p8bojlwVI4jJLl0WNnOVQ19kHC28Kna6nFf11OEajku7cH8qf4zibSPLt1l2tp+L9kVcaZcY0zXDNv+Vxo5nmpZjufNY0e8/ozCrZ8lbsAFWmvuxgrWAhWacKPzoi7m6gDedjsOaee+YfVsfkn3d4y45Njx8zqPvJBHsGHu4WNe+M9sXCRKpigplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwvVGl0bGUoRnJlZUhvcCkvQ3JlYXRvcihWZWN0b3JDcmFmdCkvUHJvZHVjZXIoVmVjdG9yQ3JhZnQpL01vZERhdGUoRDoyMDI2MTEyMjA2MDE0MFopL0NyZWF0aW9uRGF0ZShEOjIwMjYxMTIyMDYwMTQwWik+PgplbmRvYmoKNiAwIG9iago8PC9MZW5ndGggMTA1Ny9UeXBlL01ldGFkYXRhL1N1YnR5cGUvWE1MPj4Kc3RyZWFtCjw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+PHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0ieG1wLXdyaXRlciI+PHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj48cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iICB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgIHhtbG5zOnhtcFRQZz0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL3QvcGcvIiAgeG1sbnM6cGRmPSJodHRwOi8vbnMuYWRvYmUuY29tL3BkZi8xLjMvIiA+PGRjOnRpdGxlPjxyZGY6QWx0PjxyZGY6bGkgeG1sOmxhbmc9IngtZGVmYXVsdCI+RnJlZUhvcDwvcmRmOmxpPjwvcmRmOkFsdD48L2RjOnRpdGxlPjx4bXA6Q3JlYXRvclRvb2w+VmVjdG9yQ3JhZnQ8L3htcDpDcmVhdG9yVG9vbD48cGRmOlByb2R1Y2VyPlZlY3RvckNyYWZ0PC9wZGY6UHJvZHVjZXI+PHhtcDpNb2RpZnlEYXRlPjIwMjYtMTEtMjJUMDY6MDE6NDArMDA6MDA8L3htcDpNb2RpZnlEYXRlPjx4bXA6Q3JlYXRlRGF0ZT4yMDI2LTExLTIyVDA2OjAxOjQwKzAwOjAwPC94bXA6Q3JlYXRlRGF0ZT48eG1wVFBnOk5QYWdlcz4xPC94bXBUUGc6TlBhZ2VzPjxkYzpmb3JtYXQ+YXBwbGljYXRpb24vcGRmPC9kYzpmb3JtYXQ+PHhtcE1NOkluc3RhbmNlSUQ+L3Nra2xlMmh3OHB4cnVhaHFCS1Z2dz09PC94bXBNTTpJbnN0YW5jZUlEPjx4bXBNTTpEb2N1bWVudElEPi9za2tsZTJodzhweHJ1YWhxQktWdnc9PTwveG1wTU06RG9jdW1lbnRJRD48eG1wTU06UmVuZGl0aW9uQ2xhc3M+ZGVmYXVsdDwveG1wTU06UmVuZGl0aW9uQ2xhc3M+PHBkZjpQREZWZXJzaW9uPjEuNzwvcGRmOlBERlZlcnNpb24+PC9yZGY6RGVzY3JpcHRpb24+PC9yZGY6UkRGPjwveDp4bXBtZXRhPjw/eHBhY2tldCBlbmQ9InIiPz4KZW5kc3RyZWFtCmVuZG9iago3IDAgb2JqCjw8L1ZpZXdlclByZWZlcmVuY2VzPDwvRGlzcGxheURvY1RpdGxlIHRydWU+Pi9UeXBlL0NhdGFsb2cvUGFnZXMgMSAwIFIvTWV0YWRhdGEgNiAwIFI+PgplbmRvYmoKeHJlZgowIDgKMDAwMDAwMDAwMCA2NTUzNSBmDQowMDAwMDAwMDE2IDAwMDAwIG4NCjAwMDAwMDAwNjcgMDAwMDAgbg0KMDAwMDAwMDEyMCAwMDAwMCBuDQowMDAwMDAwMjU5IDAwMDAwIG4NCjAwMDAwMDA2MTkgMDAwMDAgbg0KMDAwMDAwMDc1NiAwMDAwMCBuDQowMDAwMDAxODg5IDAwMDAwIG4NCnRyYWlsZXIKPDwvU2l6ZSA4L1Jvb3QgNyAwIFIvSW5mbyA1IDAgUi9JRFsoL3Nra2xlMmh3OHB4cnVhaHFCS1Z2dz09KSgvc2trbGUyaHc4cHhydWFocUJLVnZ3PT0pXT4+CnN0YXJ0eHJlZgoxOTkyCiUlRU9G"
  },
  "document": {
   "version": 3,
@@ -184,12 +184,6 @@
          {
           "kind": "fill",
           "paint": {
-           "type": "none"
-          }
-         },
-         {
-          "kind": "stroke",
-          "paint": {
            "type": "solid",
            "color": {
             "model": "rgb",
@@ -197,9 +191,14 @@
             "g": 1.0,
             "b": 1.0
            }
+          }
+         },
+         {
+          "kind": "stroke",
+          "paint": {
+           "type": "none"
           },
-          "width": 14.0,
-          "cap": "Round"
+          "width": 0.0
          }
         ]
        },
@@ -211,31 +210,110 @@
            "anchors": [
             {
              "p": [
-              52.0,
-              164.0
+              81.0,
+              68.0
              ],
-             "out": [
-              102.67,
+             "in": [
+              73.82029825219968,
               68.0
              ]
             },
             {
              "p": [
-              204.0,
-              164.0
+              81.0,
+              68.0
+             ],
+             "out": [
+              88.17970174780032,
+              68.0
+             ]
+            },
+            {
+             "p": [
+              94.0,
+              81.0
              ],
              "in": [
-              153.33,
-              68.0
+              94.0,
+              73.82029825219968
+             ]
+            },
+            {
+             "p": [
+              94.0,
+              175.0
+             ],
+             "out": [
+              94.0,
+              182.17970174780032
+             ]
+            },
+            {
+             "p": [
+              81.0,
+              188.0
+             ],
+             "in": [
+              88.17970174780032,
+              188.0
+             ]
+            },
+            {
+             "p": [
+              81.0,
+              188.0
+             ],
+             "out": [
+              73.82029825219968,
+              188.0
+             ]
+            },
+            {
+             "p": [
+              68.0,
+              175.0
+             ],
+             "in": [
+              68.0,
+              182.17970174780032
+             ]
+            },
+            {
+             "p": [
+              68.0,
+              81.0
+             ],
+             "out": [
+              68.0,
+              73.82029825219968
              ]
             }
            ],
-           "closed": false
+           "closed": true
           }
+         ]
+        },
+        "live": {
+         "shape": "rectangle",
+         "w": 26.0,
+         "h": 120.0,
+         "radii": [
+          13.0,
+          13.0,
+          13.0,
+          13.0
+         ],
+         "xf": [
+          1.0,
+          0.0,
+          0.0,
+          1.0,
+          68.0,
+          68.0
          ]
         }
        },
-       "name": "Hop Arc"
+       "name": "F Stem"
       },
       {
        "id": 4,
@@ -270,63 +348,83 @@
            "anchors": [
             {
              "p": [
-              34.0,
-              164.0
+              81.0,
+              68.0
              ],
              "in": [
-              34.0,
-              173.94112549695427
-             ],
-             "out": [
-              34.0,
-              154.05887450304573
-             ],
-             "kind": "Smooth"
+              73.82029825219968,
+              68.0
+             ]
             },
             {
              "p": [
-              52.0,
-              146.0
-             ],
-             "in": [
-              42.058874503045715,
-              146.0
+              175.0,
+              68.0
              ],
              "out": [
-              61.941125496954285,
-              146.0
-             ],
-             "kind": "Smooth"
+              182.17970174780032,
+              68.0
+             ]
             },
             {
              "p": [
-              70.0,
-              164.0
+              188.0,
+              81.0
              ],
              "in": [
-              70.0,
-              154.05887450304573
-             ],
-             "out": [
-              70.0,
-              173.94112549695427
-             ],
-             "kind": "Smooth"
+              188.0,
+              73.82029825219968
+             ]
             },
             {
              "p": [
-              52.0,
-              182.0
-             ],
-             "in": [
-              61.941125496954285,
-              182.0
+              188.0,
+              81.0
              ],
              "out": [
-              42.058874503045715,
-              182.0
+              188.0,
+              88.17970174780032
+             ]
+            },
+            {
+             "p": [
+              175.0,
+              94.0
              ],
-             "kind": "Smooth"
+             "in": [
+              182.17970174780032,
+              94.0
+             ]
+            },
+            {
+             "p": [
+              81.0,
+              94.0
+             ],
+             "out": [
+              73.82029825219968,
+              94.0
+             ]
+            },
+            {
+             "p": [
+              68.0,
+              81.0
+             ],
+             "in": [
+              68.0,
+              88.17970174780032
+             ]
+            },
+            {
+             "p": [
+              68.0,
+              81.0
+             ],
+             "out": [
+              68.0,
+              73.82029825219968
+             ]
             }
            ],
            "closed": true
@@ -334,24 +432,26 @@
          ]
         },
         "live": {
-         "shape": "ellipse",
-         "w": 36.0,
-         "h": 36.0,
-         "pie": [
-          0.0,
-          360.0
+         "shape": "rectangle",
+         "w": 120.0,
+         "h": 26.0,
+         "radii": [
+          13.0,
+          13.0,
+          13.0,
+          13.0
          ],
          "xf": [
           1.0,
           0.0,
           0.0,
           1.0,
-          34.0,
-          146.0
+          68.0,
+          68.0
          ]
         }
        },
-       "name": "Exit 1"
+       "name": "F Top Bar"
       },
       {
        "id": 5,
@@ -386,63 +486,83 @@
            "anchors": [
             {
              "p": [
-              106.0,
-              92.0
+              81.0,
+              115.0
              ],
              "in": [
-              106.0,
-              104.15026449627746
-             ],
-             "out": [
-              106.0,
-              79.84973550372254
-             ],
-             "kind": "Smooth"
+              73.82029825219968,
+              115.0
+             ]
             },
             {
              "p": [
-              128.0,
-              70.0
-             ],
-             "in": [
-              115.84973550372254,
-              70.0
+              143.0,
+              115.0
              ],
              "out": [
-              140.15026449627746,
-              70.0
-             ],
-             "kind": "Smooth"
+              150.17970174780032,
+              115.0
+             ]
             },
             {
              "p": [
-              150.0,
-              92.0
+              156.0,
+              128.0
              ],
              "in": [
-              150.0,
-              79.84973550372254
-             ],
-             "out": [
-              150.0,
-              104.15026449627746
-             ],
-             "kind": "Smooth"
+              156.0,
+              120.82029825219968
+             ]
             },
             {
              "p": [
-              128.0,
-              114.0
-             ],
-             "in": [
-              140.15026449627746,
-              114.0
+              156.0,
+              128.0
              ],
              "out": [
-              115.84973550372254,
-              114.0
+              156.0,
+              135.17970174780032
+             ]
+            },
+            {
+             "p": [
+              143.0,
+              141.0
              ],
-             "kind": "Smooth"
+             "in": [
+              150.17970174780032,
+              141.0
+             ]
+            },
+            {
+             "p": [
+              81.0,
+              141.0
+             ],
+             "out": [
+              73.82029825219968,
+              141.0
+             ]
+            },
+            {
+             "p": [
+              68.0,
+              128.0
+             ],
+             "in": [
+              68.0,
+              135.17970174780032
+             ]
+            },
+            {
+             "p": [
+              68.0,
+              128.0
+             ],
+             "out": [
+              68.0,
+              120.82029825219968
+             ]
             }
            ],
            "closed": true
@@ -450,140 +570,26 @@
          ]
         },
         "live": {
-         "shape": "ellipse",
-         "w": 44.0,
-         "h": 44.0,
-         "pie": [
-          0.0,
-          360.0
+         "shape": "rectangle",
+         "w": 88.0,
+         "h": 26.0,
+         "radii": [
+          13.0,
+          13.0,
+          13.0,
+          13.0
          ],
          "xf": [
           1.0,
           0.0,
           0.0,
           1.0,
-          106.0,
-          70.0
+          68.0,
+          115.0
          ]
         }
        },
-       "name": "Exit 2"
-      },
-      {
-       "id": 6,
-       "appearance": {
-        "items": [
-         {
-          "kind": "fill",
-          "paint": {
-           "type": "solid",
-           "color": {
-            "model": "rgb",
-            "r": 1.0,
-            "g": 1.0,
-            "b": 1.0
-           }
-          }
-         },
-         {
-          "kind": "stroke",
-          "paint": {
-           "type": "none"
-          },
-          "width": 0.0
-         }
-        ]
-       },
-       "kind": {
-        "type": "path",
-        "path": {
-         "subpaths": [
-          {
-           "anchors": [
-            {
-             "p": [
-              186.0,
-              164.0
-             ],
-             "in": [
-              186.0,
-              173.94112549695427
-             ],
-             "out": [
-              186.0,
-              154.05887450304573
-             ],
-             "kind": "Smooth"
-            },
-            {
-             "p": [
-              204.0,
-              146.0
-             ],
-             "in": [
-              194.05887450304573,
-              146.0
-             ],
-             "out": [
-              213.94112549695427,
-              146.0
-             ],
-             "kind": "Smooth"
-            },
-            {
-             "p": [
-              222.0,
-              164.0
-             ],
-             "in": [
-              222.0,
-              154.05887450304573
-             ],
-             "out": [
-              222.0,
-              173.94112549695427
-             ],
-             "kind": "Smooth"
-            },
-            {
-             "p": [
-              204.0,
-              182.0
-             ],
-             "in": [
-              213.94112549695427,
-              182.0
-             ],
-             "out": [
-              194.05887450304573,
-              182.0
-             ],
-             "kind": "Smooth"
-            }
-           ],
-           "closed": true
-          }
-         ]
-        },
-        "live": {
-         "shape": "ellipse",
-         "w": 36.0,
-         "h": 36.0,
-         "pie": [
-          0.0,
-          360.0
-         ],
-         "xf": [
-          1.0,
-          0.0,
-          0.0,
-          1.0,
-          186.0,
-          146.0
-         ]
-        }
-       },
-       "name": "Exit 3"
+       "name": "F Middle Bar"
       }
      ]
     }
@@ -1521,7 +1527,7 @@
   },
   "raster_effects_ppi": 72.0,
   "images": {},
-  "next_id": 7,
+  "next_id": 6,
   "metadata": {
    "author": "",
    "authorTitle": "",
@@ -1531,8 +1537,8 @@
    "copyrightStatus": "unknown",
    "copyrightNotice": "",
    "copyrightUrl": "",
-   "created": 1795327158,
-   "modified": 1795327158
+   "created": 1795327300,
+   "modified": 1795327300
   }
  },
  "images": {}

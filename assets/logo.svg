@@ -1,12 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="FreeHop logo">
   <title>FreeHop</title>
-  <!-- Mark: one trajectory hopping through three exits. The middle exit
-       is bigger: the current exit. The arc is thinner than the dots, so
-       the exits read as nodes, not beads. Mark optically centered.
-       Emerald tile, white mark. Reads at 16px and at 256px. -->
+  <!-- Mark: a bold geometric F, built from hop steps. Top bar reaches
+       further than the middle bar, each hop ascending. Emerald tile,
+       white mark. Reads at 16px and at 256px. -->
   <rect x="8" y="8" width="240" height="240" rx="56" fill="#10B981"/>
-  <path d="M 52 164 C 102.67 68, 153.33 68, 204 164" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/>
-  <circle cx="52" cy="164" r="18" fill="#FFFFFF"/>
-  <circle cx="128" cy="92" r="22" fill="#FFFFFF"/>
-  <circle cx="204" cy="164" r="18" fill="#FFFFFF"/>
+  <rect x="68" y="68" width="26" height="120" rx="13" fill="#FFFFFF"/>
+  <rect x="68" y="68" width="120" height="26" rx="13" fill="#FFFFFF"/>
+  <rect x="68" y="115" width="88" height="26" rx="13" fill="#FFFFFF"/>
 </svg>

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.0 (2026-11-22)
+
+- Logo rebuilt from zero: the arc-and-dots mark is gone, replaced by a bold geometric F built from hop steps (top bar reaches further than the middle bar). Same emerald tile, same VectorCraft 0.24.1 build, verified at 512px and 32px.
+
 ## v0.2.4 (2026-11-22)
 
 - Logo redesigned with the antislop-ui + design-taste-frontend checklists: arc thinner (14, was 18) so the exits read as nodes, middle exit bigger (r22, was 17) as the current exit, mark optically centered (was 20pt low). Still flat emerald, no gradient, no decoration. Rebuilt in VectorCraft 0.24.1, verified at 512px and 32px.

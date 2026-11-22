@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.2.4-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -142,7 +142,7 @@ Tools: `freehop_status`, `freehop_doctor`, `freehop_rotate` (`dry_run` boolean),
 
 ## Logo
 
-Logo source: `assets/logo.svg`, render: `assets/logo.png` (512px). Native VectorCraft project: `assets/logo.vectorcraft`, built in VectorCraft 0.24.1 (headless CLI, command script saved in the project notes).
+A bold geometric F built from hop steps: top bar reaches further than the middle bar, each hop ascending. Logo source: `assets/logo.svg`, render: `assets/logo.png` (512px). Native VectorCraft project: `assets/logo.vectorcraft`, built in VectorCraft 0.24.1 (headless CLI, command script saved in the project notes).
 
 ## Credits
 
