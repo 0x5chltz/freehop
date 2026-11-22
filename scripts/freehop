@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # FreeHop CLI: status, rotate, doctor, logs.
-# Usage: freehop status|rotate [--dry-run]|doctor|logs|setup|teardown|help
+# Agent-friendly: status, rotate and doctor all take --json and print one
+# JSON object. Exit 0 means ok, 1 means failed, 2 means usage error.
+# Human-readable output is the default. All commands are idempotent and
+# non-interactive.
+# Usage: freehop status [--json]|rotate [--dry-run|--json]|doctor [--json]|logs|setup|teardown|help
 set -euo pipefail
 PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${FREEHOP_CONFIG:-$HOME/.config/freehop/config}"
@@ -9,43 +13,105 @@ WG_IF="freehop0"; KEYRING_GLOB="$HOME/.config/Proton/keyring-proton-sso-account-
 WATCH_UNIT=""; TEST_CMD=""
 if [ -f "$CONFIG" ]; then set -a; . "$CONFIG"; set +a; fi
 
+# JSON-escape one value (prints it quoted).
+esc() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+ns_exists() {
+  sudo -n ip netns list 2>/dev/null | awk '{print $1}' | grep -qx "$NETNS"
+}
+
+unit_state() { systemctl --user is-active "$1" >/dev/null 2>&1 && echo active || echo inactive; }
+
+gather_status() {
+  if ns_exists; then NS_STATE="present"; else NS_STATE="missing"; fi
+  # wg indents the peer lines, so no ^ anchor on endpoint:
+  WG_ENDPOINT="$(sudo -n ip netns exec "$NETNS" wg show "$WG_IF" 2>/dev/null | grep -m1 'endpoint:' | awk '{print $2}' || true)"
+  if sudo -n ip netns exec "$NETNS" wg show "$WG_IF" 2>/dev/null | grep -q 'latest handshake'; then
+    WG_HANDSHAKE="recent"
+  else
+    WG_HANDSHAKE="none"
+  fi
+  EXIT_IP="$(sudo -n ip netns exec "$NETNS" curl -s --max-time 10 https://api.ipify.org 2>/dev/null || true)"
+  PROXY_CODE="$(curl -s -m 5 -x "http://$NS_IP:$PROXY_PORT" -o /dev/null -w "%{http_code}" https://www.google.com/ 2>/dev/null || echo 000)"
+  UNIT_PROXY="$(unit_state freehop-proxy.service)"
+  UNIT_TIMER="$(unit_state freehop-watch.timer)"
+  LAST_SERVER=""; LAST_EXIT=""
+  if [ -f "$STATE_DIR/rotate-state.json" ]; then
+    LAST_SERVER="$(python3 -c "import json; print(json.load(open('$STATE_DIR/rotate-state.json')).get('server',''))" 2>/dev/null || true)"
+    LAST_EXIT="$(python3 -c "import json; print(json.load(open('$STATE_DIR/rotate-state.json')).get('exit_ip',''))" 2>/dev/null || true)"
+  fi
+}
+
 cmd_status() {
+  local json=0
+  [ "${1:-}" = "--json" ] && json=1
+  gather_status
+  if [ "$json" -eq 1 ]; then
+    printf '{"netns": %s, "wg_interface": %s, "wg_endpoint": %s, "wg_handshake": %s, "exit_ip": %s, "proxy": {"url": %s, "http_code": %s}, "units": {"proxy": %s, "watch_timer": %s}, "last_rotate": {"server": %s, "exit_ip": %s}}\n' \
+      "$(esc "$NS_STATE")" "$(esc "$WG_IF")" "$(esc "$WG_ENDPOINT")" "$(esc "$WG_HANDSHAKE")" "$(esc "$EXIT_IP")" \
+      "$(esc "http://$NS_IP:$PROXY_PORT")" "$(esc "$PROXY_CODE")" \
+      "$(esc "$UNIT_PROXY")" "$(esc "$UNIT_TIMER")" \
+      "$(esc "$LAST_SERVER")" "$(esc "$LAST_EXIT")"
+    return 0
+  fi
   echo "== FreeHop status =="
   "$PREFIX/scripts/freehop-netns.sh" status
   echo -n "proxy $NS_IP:$PROXY_PORT: "
-  if curl -s -m 5 -x "http://$NS_IP:$PROXY_PORT" -o /dev/null -w "%{http_code}" https://www.google.com/ 2>/dev/null | grep -qx 200; then
-    echo "200 OK"
+  if [ "$PROXY_CODE" = "200" ]; then echo "200 OK"; else echo "unreachable"; fi
+  echo "units: proxy $UNIT_PROXY, watch.timer $UNIT_TIMER"
+  if [ -n "$LAST_SERVER" ]; then echo "last rotate: $LAST_SERVER $LAST_EXIT"; fi
+}
+
+# Doctor checks are recorded as name|ok|hint, then printed human or JSON.
+RESULTS=()
+check() {
+  local name="$1" cmd="$2" hint="$3"
+  if eval "$cmd" >/dev/null 2>&1; then
+    RESULTS+=("$name|1|")
   else
-    echo "unreachable"
-  fi
-  echo "units:"
-  systemctl --user is-active freehop-proxy.service freehop-watch.timer 2>/dev/null | paste -d' ' <(echo -e "proxy\nwatch.timer") - || true
-  if [ -f "$STATE_DIR/rotate-state.json" ]; then
-    echo "last rotate: $(python3 -c "import json; d=json.load(open('$STATE_DIR/rotate-state.json')); print(d.get('server'), d.get('exit_ip'))" 2>/dev/null)"
+    RESULTS+=("$name|0|$hint")
   fi
 }
 
 cmd_doctor() {
-  ok=0; fail=0
-  check() { if eval "$2" >/dev/null 2>&1; then echo "[ok]   $1"; ok=$((ok+1)); else echo "[FAIL] $1"; fail=$((fail+1)); fi; }
-  check "python3" "command -v python3"
-  check "wg" "command -v wg"
-  check "ip (iproute2)" "command -v ip"
-  check "iptables" "command -v iptables"
-  check "curl" "command -v curl"
-  check "proton vpn library" "python3 -c \"import sys; sys.path.insert(0,'/usr/lib/python3/dist-packages'); import proton.vpn\""
-  check "passwordless sudo" "sudo -n true"
-  check "proton keyring present" "ls $KEYRING_GLOB >/dev/null 2>&1"
-  check "certificate fetched" "test -f $STATE_DIR/cert.json"
-  check "netns exists" "sudo -n ip netns list 2>/dev/null | awk '{print \$1}' | grep -qx $NETNS"
-  check "wg interface up" "sudo -n ip netns exec $NETNS ip link show $WG_IF 2>/dev/null | grep -q UP"
-  check "wg handshake recent" "sudo -n ip netns exec $NETNS wg show $WG_IF 2>/dev/null | grep -q 'latest handshake'"
-  check "inside-ns egress" "sudo -n ip netns exec $NETNS curl -s -m 10 -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200"
-  check "proxy egress" "curl -s -m 10 -x http://$NS_IP:$PROXY_PORT -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200"
-  check "proxy unit active" "systemctl --user is-active -q freehop-proxy.service"
-  check "watch timer active" "systemctl --user is-active -q freehop-watch.timer"
-  if [ -n "$TEST_CMD" ]; then check "test command" "$TEST_CMD"; fi
-  echo "doctor: $ok ok, $fail failed"
+  local json=0
+  [ "${1:-}" = "--json" ] && json=1
+  check "python3" "command -v python3" "install python3"
+  check "wg" "command -v wg" "install wireguard"
+  check "ip (iproute2)" "command -v ip" "install iproute2"
+  check "iptables" "command -v iptables" "install iptables"
+  check "curl" "command -v curl" "install curl"
+  check "proton vpn library" "python3 -c \"import sys; sys.path.insert(0,'/usr/lib/python3/dist-packages'); import proton.vpn\"" "install the official Proton VPN Linux client"
+  check "passwordless sudo" "sudo -n true" "install sudoers/freehop to /etc/sudoers.d/freehop"
+  check "proton keyring present" "ls $KEYRING_GLOB >/dev/null 2>&1" "log in once with the Proton VPN client"
+  check "certificate fetched" "test -f $STATE_DIR/cert.json" "run: freehop rotate"
+  check "netns exists" "ns_exists" "run: freehop setup"
+  check "wg interface up" "sudo -n ip netns exec $NETNS ip link show $WG_IF 2>/dev/null | grep -q UP" "run: freehop setup"
+  check "wg handshake recent" "sudo -n ip netns exec $NETNS wg show $WG_IF 2>/dev/null | grep -q 'latest handshake'" "run: freehop rotate"
+  check "inside-ns egress" "sudo -n ip netns exec $NETNS curl -s -m 10 -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200" "tunnel dead, run: freehop rotate"
+  check "proxy egress" "curl -s -m 10 -x http://$NS_IP:$PROXY_PORT -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200" "check freehop-proxy.service, run: freehop logs"
+  check "proxy unit active" "systemctl --user is-active -q freehop-proxy.service" "run: systemctl --user start freehop-proxy.service"
+  check "watch timer active" "systemctl --user is-active -q freehop-watch.timer" "run: systemctl --user start freehop-watch.timer"
+  if [ -n "$TEST_CMD" ]; then check "test command" "$TEST_CMD" "check TEST_CMD in $CONFIG"; fi
+  local ok=0 fail=0
+  local r name isok hint
+  if [ "$json" -eq 1 ]; then
+    printf '{"checks": ['
+    local first=1
+    for r in "${RESULTS[@]}"; do
+      name="${r%%|*}"; rest="${r#*|}"; isok="${rest%%|*}"; hint="${rest#*|}"
+      [ "$isok" = "1" ] && ok=$((ok+1)) || fail=$((fail+1))
+      [ "$first" -eq 1 ] && first=0 || printf ', '
+      printf '{"name": %s, "ok": %s, "hint": %s}' "$(esc "$name")" "$([ "$isok" = "1" ] && echo true || echo false)" "$(esc "$hint")"
+    done
+    printf '], "ok": %s, "failed": %s}\n' "$ok" "$fail"
+  else
+    for r in "${RESULTS[@]}"; do
+      name="${r%%|*}"; rest="${r#*|}"; isok="${rest%%|*}"; hint="${rest#*|}"
+      if [ "$isok" = "1" ]; then echo "[ok]   $name"; ok=$((ok+1)); else echo "[FAIL] $name ($hint)"; fail=$((fail+1)); fi
+    done
+    echo "doctor: $ok ok, $fail failed"
+  fi
   [ "$fail" -eq 0 ]
 }
 
@@ -56,11 +122,11 @@ cmd_logs() {
 }
 
 case "${1:-help}" in
-  status) cmd_status ;;
+  status) shift; cmd_status "$@" ;;
   rotate) shift; python3 "$PREFIX/src/freehop-rotate.py" "$@" ;;
-  doctor) cmd_doctor ;;
+  doctor) shift; cmd_doctor "$@" ;;
   logs) cmd_logs ;;
   setup) "$PREFIX/scripts/freehop-netns.sh" setup ;;
   teardown) "$PREFIX/scripts/freehop-netns.sh" teardown ;;
-  help|*) echo "usage: freehop status|rotate [--dry-run]|doctor|logs|setup|teardown" ;;
+  help|*) echo "usage: freehop status [--json]|rotate [--dry-run|--json]|doctor [--json]|logs|setup|teardown"; [ "${1:-help}" = "help" ] && exit 0 || exit 2 ;;
 esac

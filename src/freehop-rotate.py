@@ -180,5 +180,13 @@ def rotate(dry_run=False):
     return target["Name"], exit_ip
 
 if __name__ == "__main__":
-    name, ip = rotate(dry_run="--dry-run" in sys.argv)
-    print(f"DONE server={name} exit_ip={ip}")
+    import contextlib, json as _json
+    want_json = "--json" in sys.argv
+    if want_json:
+        # Progress lines go to stderr so stdout stays one JSON object.
+        with contextlib.redirect_stdout(sys.stderr):
+            name, ip = rotate(dry_run="--dry-run" in sys.argv)
+        print(_json.dumps({"server": name, "exit_ip": ip, "rotated_at": int(time.time())}))
+    else:
+        name, ip = rotate(dry_run="--dry-run" in sys.argv)
+        print(f"DONE server={name} exit_ip={ip}")

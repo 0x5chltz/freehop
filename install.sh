@@ -3,10 +3,17 @@
 # Installs to ~/.local/share/freehop, config to ~/.config/freehop/config.
 # Prerequisites: Proton VPN client logged in once (creates the keyring),
 # passwordless sudo for ip/wg/iptables (see README for the sudoers snippet).
-# Usage: ./install.sh [--prefix DIR]
+# Usage: ./install.sh [--prefix DIR] [--yes]
+# --yes accepts the flag for scripted installs; the installer never prompts.
 set -euo pipefail
-PREFIX="${1:-$HOME/.local/share/freehop}"
-if [ "${1:-}" = "--prefix" ]; then PREFIX="${2:-$HOME/.local/share/freehop}"; fi
+PREFIX="$HOME/.local/share/freehop"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prefix) PREFIX="${2:-$HOME/.local/share/freehop}"; shift 2 ;;
+    --yes) shift ;;
+    *) echo "usage: $0 [--prefix DIR] [--yes]" >&2; exit 2 ;;
+  esac
+done
 CONFIG="${FREEHOP_CONFIG:-$HOME/.config/freehop/config}"
 SRC="$(cd "$(dirname "$0")" && pwd)"
 

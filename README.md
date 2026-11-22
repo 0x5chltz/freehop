@@ -90,6 +90,16 @@ freehop doctor          # deps, keyring, cert, tunnel, proxy, units
 freehop logs            # watcher log tail + proxy unit status
 ```
 
+## AI agents
+
+FreeHop is built to be driven by an agent, not just a human at a terminal.
+
+- Skill file: `skills/freehop/SKILL.md` (Agent Skills format). Load it before operating FreeHop.
+- Every command takes `--json` and prints one JSON object; exit 0 means ok, 1 means failed, 2 means usage error.
+- All operations are idempotent and non-interactive. `install.sh --yes` never prompts.
+- `freehop doctor --json` is the first thing to run when something is wrong; each failed check names the fix.
+- Never print credentials. FreeHop never prints them either.
+
 ## Troubleshooting
 
 - **First connect after a peer swap fails with APIError 86203 "session not found".** Known Proton race, the agent is retried up to 3 times with the same certificate before the rotate gives up.
