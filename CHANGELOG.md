@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.1 (2026-11-22)
+
+- README: copy-paste setup prompt for AI agents under "AI agents" (skill file first, prerequisites, install, configure for your gateway, verify, MCP if available, safety rules).
+
 ## v0.3.0 (2026-11-22)
 
 - Logo rebuilt from zero: the arc-and-dots mark is gone, replaced by a bold geometric F built from hop steps (top bar reaches further than the middle bar). Same emerald tile, same VectorCraft 0.24.1 build, verified at 512px and 32px.

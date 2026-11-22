@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.3.1-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -108,6 +108,26 @@ FreeHop is built to be driven by an agent, not just a human at a terminal.
 - All operations are idempotent and non-interactive. `install.sh --yes` never prompts.
 - `freehop doctor --json` is the first thing to run when something is wrong; each failed check names the fix.
 - Never print credentials. FreeHop never prints them either.
+
+### Copy-paste setup prompt
+
+Give this to an AI agent to set FreeHop up on a machine. Fill in the gateway line first.
+
+```
+Set up FreeHop on this machine so my AI gateway keeps answering when its free tier returns 429.
+
+1. Read the skill file first and follow it exactly: skills/freehop/SKILL.md in the cloned repo (or https://github.com/Urdemonlord/freehop/blob/main/skills/freehop/SKILL.md if you have not cloned yet).
+2. Check the prerequisites and stop with the exact missing piece if one fails: Linux (Ubuntu 24.04 / Debian 12+), systemd, Python 3.10+, wireguard, iproute2, iptables, curl; a Proton Free account already logged in once with the official Proton VPN Linux client (that creates the keyring FreeHop reads); passwordless sudo for ip, wg, iptables (repo file sudoers/freehop).
+3. Install non-interactively:
+   git clone https://github.com/Urdemonlord/freehop.git
+   cd freehop
+   ./install.sh --yes
+4. Configure ~/.config/freehop/config for my gateway: [GATEWAY: e.g. 9Router, systemd unit hermes-gateway.service, proxy HTTP_PROXY=http://10.200.0.2:18080]. Set WATCH_UNIT, WATCH_PATTERN, POST_ROTATE_HOOK, and TEST_CMD to match it (see the 9Router example in the skill file).
+5. Verify: freehop doctor --json (every check must pass), freehop status --json, and freehop rotate --dry-run --json (prints the target, changes nothing). Then run one real rotate only if doctor passes, and report the exit IP.
+6. If MCP is available, register the server with the config from `freehop mcp` instead of driving the CLI.
+
+Rules: use --json on every command and read the result before the next step. Never print, log, or commit credentials. Do not change the gateway's proxy config, restart gateway services, or edit the live gateway unless I ask; the POST_ROTATE_HOOK in the config is the only approved place for a restart. Rotate is safe and reversible, but do not rotate in a loop (budget 6/hour, 20/day). If a prerequisite is missing or a doctor check fails, stop and tell me the exact fix instead of working around it.
+```
 
 ## MCP server
 
