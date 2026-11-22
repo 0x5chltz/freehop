@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.2.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.2.3-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -142,9 +142,7 @@ Tools: `freehop_status`, `freehop_doctor`, `freehop_rotate` (`dry_run` boolean),
 
 ## Logo
 
-The logo lives in `assets/` as `logo.svg` (source) and `logo.png` (512px render). One trajectory hopping through three exits, emerald tile, white mark.
-
-Edit it in VectorCraft: open `assets/logo.svg`, change the shapes, export SVG or PNG from there. The mark is three circles (r=17) at (52,184), (128,112), (204,184) on a 256 viewBox, one quadratic arc `M 52 184 Q 128 40 204 184` (stroke 18), on a rounded tile (240x240, rx 56, `#10B981`).
+Logo source: `assets/logo.svg`, render: `assets/logo.png` (512px). Native VectorCraft project: `assets/logo.vectorcraft`, built in VectorCraft 0.24.1 (headless CLI, command script saved in the project notes).
 
 ## Credits
 

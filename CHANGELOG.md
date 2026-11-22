@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.3 (2026-11-22)
+
+- Logo now has a native VectorCraft project: `assets/logo.vectorcraft`, built with VectorCraft 0.24.1's own headless CLI (`vectorcraft-cli run`, 18 command steps: tile, arc, three exits), not hand-written. Rendered and verified with VectorCraft's own renderer; `logo.png` is now VectorCraft's export. README no longer tells anyone to edit anything.
+
 ## v0.2.2 (2026-11-22)
 
 - README: logo section tells people to edit `assets/logo.svg` in VectorCraft, with the mark's construction (circles, arc, tile) so it can be rebuilt there.
