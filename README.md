@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.3.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.3.2-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -114,7 +114,7 @@ FreeHop is built to be driven by an agent, not just a human at a terminal.
 Give this to an AI agent to set FreeHop up on a machine. Fill in the gateway line first.
 
 ```
-Set up FreeHop on this machine so my AI gateway keeps answering when its free tier returns 429.
+Set up FreeHop on this machine so my 9Router gateway keeps answering when the OpenCode free tier returns 429. This setup is built specifically for 9Router serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`); another gateway can reuse the same knobs with its own unit and test command.
 
 1. Read the skill file first and follow it exactly: skills/freehop/SKILL.md in the cloned repo (or https://github.com/Urdemonlord/freehop/blob/main/skills/freehop/SKILL.md if you have not cloned yet).
 2. Check the prerequisites and stop with the exact missing piece if one fails: Linux (Ubuntu 24.04 / Debian 12+), systemd, Python 3.10+, wireguard, iproute2, iptables, curl; a Proton Free account already logged in once with the official Proton VPN Linux client (that creates the keyring FreeHop reads); passwordless sudo for ip, wg, iptables (repo file sudoers/freehop).
@@ -122,7 +122,12 @@ Set up FreeHop on this machine so my AI gateway keeps answering when its free ti
    git clone https://github.com/Urdemonlord/freehop.git
    cd freehop
    ./install.sh --yes
-4. Configure ~/.config/freehop/config for my gateway: [GATEWAY: e.g. 9Router, systemd unit hermes-gateway.service, proxy HTTP_PROXY=http://10.200.0.2:18080]. Set WATCH_UNIT, WATCH_PATTERN, POST_ROTATE_HOOK, and TEST_CMD to match it (see the 9Router example in the skill file).
+4. Configure ~/.config/freehop/config for the 9Router gateway:
+   WATCH_UNIT=hermes-gateway.service
+   WATCH_PATTERN=FreeUsageLimitError
+   POST_ROTATE_HOOK=systemctl --user restart 9router.service
+   TEST_CMD=python3 ~/.local/share/freehop/examples/test-9router.py
+   Point 9Router at the proxy with the drop-in in examples/9router-proxy.conf (HTTP_PROXY=http://10.200.0.2:18080, HTTPS_PROXY the same, NO_PROXY=127.0.0.1,localhost).
 5. Verify: freehop doctor --json (every check must pass), freehop status --json, and freehop rotate --dry-run --json (prints the target, changes nothing). Then run one real rotate only if doctor passes, and report the exit IP.
 6. If MCP is available, register the server with the config from `freehop mcp` instead of driving the CLI.
 

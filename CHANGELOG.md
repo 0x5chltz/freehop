@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.2 (2026-11-22)
+
+- README setup prompt now names the stack it is built for: 9Router serving the OpenCode provider's `combos` model, with the concrete config instead of a generic gateway placeholder.
+
 ## v0.3.1 (2026-11-22)
 
 - README: copy-paste setup prompt for AI agents under "AI agents" (skill file first, prerequisites, install, configure for your gateway, verify, MCP if available, safety rules).
