@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
-"""Rotate the scoped Proton netns tunnel to another free server.
-Picks the lowest-load free (Tier 0, Status 1) server different from the
-current one. Steps: refresh logicals from API, swap wg peer, fix endpoint
-host route + /etc/hosts agent line, restart agent, verify exit IP.
-Refreshes the agent certificate if past its RefreshTime.
-Agent connect is retried up to 3 times: the first connect after a peer
-swap often fails with APIError 86203 "session not found" and succeeds
-on retry with the same certificate.
+"""Rotate the FreeHop egress to a fresh exit.
+EGRESS_METHOD (config) picks the method, default proton:
+  proton:     WireGuard to another Proton Free server (the original flow).
+              Picks the lowest-load free (Tier 0, Status 1) server different
+              from the current one. Steps: refresh logicals from API, swap
+              wg peer, fix endpoint host route + /etc/hosts agent line,
+              restart agent, verify exit IP. Refreshes the agent certificate
+              if past its RefreshTime. Agent connect is retried up to 3
+              times: the first connect after a peer swap often fails with
+              APIError 86203 "session not found" and succeeds on retry with
+              the same certificate.
+  tor:        SIGNAL NEWNYM to the Tor control port, then verify the exit
+              IP changed (up to 3 attempts). The proxy chains through Tor's
+              SOCKS port; see upstream.json.
+  proxy-pool: round-robin to the next upstream in PROXY_POOL, write it to
+              upstream.json, verify the proxy still answers. A dead entry
+              is skipped on the next attempt because the pointer advanced.
 Never prints secrets. All paths come from the FreeHop config file
 ($FREEHOP_CONFIG or ~/.config/freehop/config).
 Usage: freehop-rotate.py [--dry-run]
 """
-import glob, json, os, re, subprocess, sys, time, urllib.request
+import glob, json, os, re, socket, subprocess, sys, time, urllib.request
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -32,15 +41,23 @@ def load_config():
 
 
 CFG = load_config()
+METHOD = CFG("EGRESS_METHOD", "proton")
 NETNS = CFG("NETNS", "freehop")
 WG_IF = CFG("WG_IF", "freehop0")
 VETH_NS = CFG("VETH_NS", "veth-ns")
 HOST_GW = CFG("HOST_IP", "10.200.0.1")
+NS_IP = CFG("NS_IP", "10.200.0.2")
+PROXY_PORT = CFG("PROXY_PORT", "18080")
 STATE_DIR = CFG("STATE_DIR", "~/.local/share/freehop")
 KEYRING_GLOB = CFG("KEYRING_GLOB", "~/.config/Proton/keyring-proton-sso-account-*.json")
 CERT_FILE = os.path.join(STATE_DIR, "cert.json")
 LOGICALS_FILE = os.path.join(STATE_DIR, "logicals.json")
 STATE_FILE = os.path.join(STATE_DIR, "rotate-state.json")
+UPSTREAM_FILE = os.path.join(STATE_DIR, "upstream.json")
+POOL_STATE_FILE = os.path.join(STATE_DIR, "pool-state.json")
+TOR_CONTROL = CFG("TOR_CONTROL", "127.0.0.1:9051")
+PROXY_POOL = CFG("PROXY_POOL", "")
+EXIT_IP_URL = CFG("EXIT_IP_URL", "https://api.ipify.org")
 AGENT_PY = os.path.join(_HERE, "freehop-agent.py")
 AGENT_LOG = os.path.join(STATE_DIR, "agent.log")
 
@@ -49,6 +66,33 @@ def run(cmd, check=True, timeout=60):
     if check and r.returncode != 0:
         raise RuntimeError(f"CMD FAILED {r.returncode}: {cmd}\n{r.stdout}\n{r.stderr}")
     return r
+
+def write_state(extra):
+    st = {}
+    try:
+        st = json.load(open(STATE_FILE))
+    except Exception:
+        pass
+    st.update(extra)
+    st["rotated_at"] = int(time.time())
+    os.makedirs(STATE_DIR, exist_ok=True)
+    json.dump(st, open(STATE_FILE, "w"))
+
+def write_upstream(d):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    json.dump(d, open(UPSTREAM_FILE, "w"))
+
+def exit_ip_via_proxy():
+    r = run(f"curl -s --max-time 15 --noproxy '' -x http://{NS_IP}:{PROXY_PORT} {EXIT_IP_URL}", check=False)
+    return r.stdout.strip()
+
+def prev_exit_ip():
+    try:
+        return json.load(open(STATE_FILE)).get("exit_ip", "")
+    except Exception:
+        return ""
+
+# ---- proton (original flow) ----
 
 def load_keyring():
     files = glob.glob(KEYRING_GLOB)
@@ -129,7 +173,7 @@ def start_agent(domain, attempts=3):
         time.sleep(3)
     raise RuntimeError(f"agent did not connect after {attempts} attempts: {last[-400:]}")
 
-def rotate(dry_run=False):
+def rotate_proton(dry_run=False):
     kr = load_keyring()
     log = refresh_logicals(kr)
     items = log["LogicalServers"]
@@ -167,17 +211,105 @@ def rotate(dry_run=False):
     run(f"echo '{new_ip} {new_domain} # freehop-agent-scoped' | sudo -n tee -a /etc/hosts > /dev/null")
     start_agent(new_domain)
     time.sleep(2)
-    exit_ip = run(f"sudo -n ip netns exec {NETNS} curl -s --max-time 15 https://api.ipify.org").stdout.strip()
+    exit_ip = run(f"sudo -n ip netns exec {NETNS} curl -s --max-time 15 {EXIT_IP_URL}").stdout.strip()
     print("new exit IP:", exit_ip)
-    st = {}
-    try:
-        st = json.load(open(STATE_FILE))
-    except Exception:
-        pass
-    st.update({"server": target["Name"], "domain": new_domain, "exit_ip": exit_ip, "rotated_at": int(time.time())})
-    os.makedirs(STATE_DIR, exist_ok=True)
-    json.dump(st, open(STATE_FILE, "w"))
+    write_state({"method": "proton", "server": target["Name"], "domain": new_domain, "exit_ip": exit_ip})
     return target["Name"], exit_ip
+
+# ---- tor ----
+
+def tor_control(cmds, timeout=15):
+    host, _, port = TOR_CONTROL.rpartition(":")
+    s = socket.create_connection((host, int(port or 9051)), timeout=timeout)
+    f = s.makefile("rwb")
+    out = []
+    try:
+        for cmd in cmds:
+            f.write((cmd + "\r\n").encode())
+            f.flush()
+            while True:
+                line = f.readline().decode(errors="ignore").strip()
+                if not line:
+                    raise RuntimeError("tor control port closed")
+                out.append(line)
+                if re.match(r"^\d{3} ", line):
+                    break
+                if re.match(r"^5\d{2} ", line):
+                    raise RuntimeError(f"tor control error: {line}")
+    finally:
+        try: f.close()
+        except Exception: pass
+        s.close()
+    return out
+
+def rotate_tor(dry_run=False):
+    prev = prev_exit_ip()
+    print("tor: current exit IP:", prev or "(unknown)")
+    if dry_run:
+        print("tor: would send SIGNAL NEWNYM, no changes made")
+        return "tor", None
+    for attempt in range(1, 4):
+        tor_control(["AUTHENTICATE", "SIGNAL NEWNYM", "QUIT"])
+        print(f"tor: NEWNYM sent (attempt {attempt}/3), waiting for a new circuit")
+        time.sleep(10)
+        ip = exit_ip_via_proxy()
+        print(f"tor: exit IP now {ip or '(unreachable)'}")
+        if ip and ip != prev:
+            write_state({"method": "tor", "server": "tor", "exit_ip": ip})
+            return "tor", ip
+        time.sleep(5)
+    raise RuntimeError("tor exit IP did not change after 3 NEWNYM signals")
+
+# ---- proxy-pool ----
+
+def parse_pool():
+    pool = []
+    for entry in PROXY_POOL.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        scheme, _, rest = entry.partition("://")
+        if scheme not in ("http", "socks5") or not rest:
+            raise RuntimeError(f"bad PROXY_POOL entry (want http:// or socks5://host:port): {entry}")
+        host, _, port = rest.rpartition(":")
+        pool.append((scheme, host, int(port or 80)))
+    return pool
+
+def rotate_pool(dry_run=False):
+    pool = parse_pool()
+    if not pool:
+        raise RuntimeError("PROXY_POOL is empty (set it in the config)")
+    try:
+        idx = int(json.load(open(POOL_STATE_FILE)).get("index", -1))
+    except Exception:
+        idx = -1
+    nxt = (idx + 1) % len(pool)
+    scheme, host, port = pool[nxt]
+    print(f"pool: next upstream {scheme}://{host}:{port} ({nxt + 1}/{len(pool)})")
+    if dry_run:
+        print("pool: dry-run, no changes made")
+        return "proxy-pool", None
+    write_upstream({"type": scheme, "host": host, "port": port})
+    os.makedirs(STATE_DIR, exist_ok=True)
+    json.dump({"index": nxt}, open(POOL_STATE_FILE, "w"))
+    time.sleep(2)
+    ip = exit_ip_via_proxy()
+    if not ip:
+        raise RuntimeError(f"pool upstream {scheme}://{host}:{port} unreachable via proxy")
+    print("pool: exit IP now", ip)
+    write_state({"method": "proxy-pool", "server": "proxy-pool", "upstream": f"{scheme}://{host}:{port}", "exit_ip": ip})
+    return "proxy-pool", ip
+
+# ---- dispatch ----
+
+def rotate(dry_run=False):
+    if METHOD == "proton":
+        return rotate_proton(dry_run)
+    if METHOD == "tor":
+        return rotate_tor(dry_run)
+    if METHOD == "proxy-pool":
+        return rotate_pool(dry_run)
+    raise RuntimeError(f"unknown EGRESS_METHOD: {METHOD} (want proton, tor, or proxy-pool)")
 
 if __name__ == "__main__":
     import contextlib, json as _json
@@ -186,7 +318,7 @@ if __name__ == "__main__":
         # Progress lines go to stderr so stdout stays one JSON object.
         with contextlib.redirect_stdout(sys.stderr):
             name, ip = rotate(dry_run="--dry-run" in sys.argv)
-        print(_json.dumps({"server": name, "exit_ip": ip, "rotated_at": int(time.time())}))
+        print(_json.dumps({"method": METHOD, "server": name, "exit_ip": ip, "rotated_at": int(time.time())}))
     else:
         name, ip = rotate(dry_run="--dry-run" in sys.argv)
-        print(f"DONE server={name} exit_ip={ip}")
+        print(f"DONE method={METHOD} server={name} exit_ip={ip}")

@@ -3,6 +3,34 @@
 # no credentials are ever stored in this file. The Proton keyring and
 # certificate stay where the Proton client and FreeHop put them.
 
+# Egress method: which exit the gateway's traffic leaves through.
+# proton (default): WireGuard to a Proton Free server, rotated on 429.
+#   Needs the Proton VPN client logged in once (keyring below).
+# tor: Tor daemon, SIGNAL NEWNYM rotates the exit. Needs tor installed.
+#   The proxy chains through Tor's SOCKS port; the daemon is managed by
+#   freehop-tor.service. Slower than Proton, and some providers block
+#   Tor exits, so treat it as a fallback, not the default.
+# proxy-pool: round-robin over your own upstream proxies. The proxy
+#   chains to the current entry; rotate advances it. Needs PROXY_POOL.
+# Not implemented on purpose: WARP (tested on this VPS, both shared
+# egress IPs were already 429, see README) and IPv6 /64 rotation
+# (needs a host with an IPv6 /64; this VPS has no IPv6 at all).
+EGRESS_METHOD=proton
+
+# Tor (only when EGRESS_METHOD=tor). SocksPort is bound to HOST_IP so the
+# proxy inside the netns can reach it; the control port stays on the host.
+TOR_SOCKS_PORT=9050
+TOR_CONTROL=127.0.0.1:9051
+
+# Proxy pool (only when EGRESS_METHOD=proxy-pool): comma-separated
+# upstream proxies, http:// or socks5://. Rotate advances round-robin.
+PROXY_POOL=
+
+# Where the rotate checks the exit IP (a URL that returns the caller's IP
+# as plain text). Default is api.ipify.org; point it at a local server
+# when testing offline.
+EXIT_IP_URL=https://api.ipify.org
+
 # Network namespace and WireGuard interface (scoped, host traffic untouched)
 NETNS=freehop
 WG_IF=freehop0

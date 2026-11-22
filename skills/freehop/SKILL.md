@@ -1,11 +1,11 @@
 ---
 name: freehop
-description: Keep a 9Router gateway serving the OpenCode provider's combos model alive by hopping Proton VPN exits when the free limit hits. Use when a gateway returns 429 FreeUsageLimitError, the tunnel is dead, or you need to check, rotate, or troubleshoot the Proton exit. Covers install, status, rotate, doctor, and troubleshooting. Does not cover general VPN use or other providers.
+description: Keep a 9Router gateway serving the OpenCode provider's combos model alive by hopping exits when the free limit hits. Use when a gateway returns 429 FreeUsageLimitError, the tunnel is dead, or you need to check, rotate, or troubleshoot the exit. Egress methods: Proton WireGuard (default), Tor NEWNYM, or a proxy pool. Covers install, status, rotate, doctor, and troubleshooting. Does not cover general VPN use or other providers.
 ---
 
 # FreeHop
 
-FreeHop keeps a free-tier AI gateway answering by rotating Proton Free VPN exits. It is built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`). A scoped WireGuard tunnel lives in its own network namespace, a forward proxy routes only the gateway's traffic through it, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. Server-side, Linux only, no GUI.
+FreeHop keeps a free-tier AI gateway answering by rotating exits. It is built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`). A scoped network namespace holds a forward proxy that routes only the gateway's traffic through the current exit, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. Server-side, Linux only, no GUI. The exit comes from one of three methods, `EGRESS_METHOD` in the config: `proton` (WireGuard to a Proton Free server, default), `tor` (NEWNYM on the Tor control port, the proxy chains through Tor's SOCKS port), or `proxy-pool` (round-robin over your own `http://` or `socks5://` upstreams).
 
 ## When to use it
 
@@ -17,13 +17,14 @@ FreeHop keeps a free-tier AI gateway answering by rotating Proton Free VPN exits
 ## When NOT to use it
 
 - The gateway fails for any other reason (bad key, upstream down, config error). Rotating will not fix those; run `doctor` first and read the failing check.
-- The machine is not Linux, has no Proton Free account, or you cannot get passwordless sudo for `ip`/`wg`/`iptables`. FreeHop cannot run there.
-- Never use it to evade a paid limit. It rotates your own free VPN exits when a free tier limit hits. Follow the terms of the services you use.
+- The machine is not Linux, has no exit method available, or you cannot get passwordless sudo for `ip`/`wg`/`iptables`. FreeHop cannot run there. `proton` needs a Proton Free account; `tor` needs tor installed; `proxy-pool` needs your own upstreams.
+- Never use it to evade a paid limit. It rotates your own free exits when a free tier limit hits. Follow the terms of the services you use.
 
 ## Prerequisites
 
-- Linux (Ubuntu 24.04 / Debian 12+), systemd, Python 3.10+, `wireguard`, `iproute2`, `iptables`, `curl`.
-- A Proton Free account, logged in once with the official Proton VPN Linux client. That creates the keyring FreeHop reads. FreeHop never asks for a password and never prints credentials.
+- Linux (Ubuntu 24.04 / Debian 12+), systemd, Python 3.10+, `iproute2`, `iptables`, `curl`.
+- Per method: `proton` needs `wireguard` and a Proton Free account, logged in once with the official Proton VPN Linux client (that creates the keyring FreeHop reads). `tor` needs `tor` installed. `proxy-pool` needs `PROXY_POOL` set in the config.
+- FreeHop never asks for a password and never prints credentials.
 - Passwordless sudo for `ip`, `wg`, `iptables` (repo file `sudoers/freehop`).
 
 ## Install (non-interactive)
@@ -34,7 +35,7 @@ cd freehop
 ./install.sh --yes
 ```
 
-The installer checks tools, the Proton library, the keyring, and passwordless sudo, installs to `~/.local/share/freehop`, writes `~/.config/freehop/config` if missing, enables the units, builds the namespace, and runs a first rotate. It never prompts. If a prerequisite is missing it exits non-zero and prints the exact fix.
+The installer checks tools, the prerequisites for the configured `EGRESS_METHOD`, and passwordless sudo, installs to `~/.local/share/freehop`, writes `~/.config/freehop/config` if missing, enables the units, builds the namespace, and runs a first rotate. It never prompts. If a prerequisite is missing it exits non-zero and prints the exact fix.
 
 ## Configuration
 
@@ -42,6 +43,10 @@ The installer checks tools, the Proton library, the keyring, and passwordless su
 
 | Setting | Default | What it does |
 | --- | --- | --- |
+| `EGRESS_METHOD` | `proton` | `proton`, `tor`, or `proxy-pool` |
+| `TOR_SOCKS_PORT` / `TOR_CONTROL` | `9050` / `127.0.0.1:9051` | Tor SOCKS and control ports (tor only) |
+| `PROXY_POOL` | (empty) | comma-separated upstreams, `http://` or `socks5://` (proxy-pool only) |
+| `EXIT_IP_URL` | `https://api.ipify.org` | URL returning the caller's IP as plain text, used to verify a rotate |
 | `WATCH_UNIT` | (empty) | systemd unit whose journal is watched for the limit pattern |
 | `WATCH_PATTERN` | `FreeUsageLimitError` | journal text that means "free limit hit" |
 | `POST_ROTATE_HOOK` | (empty) | command after a rotate, e.g. `systemctl --user restart 9router.service` |
@@ -78,18 +83,20 @@ freehop setup | teardown          # build or remove the namespace
 `status --json` shape:
 
 ```json
-{"netns": "present", "wg_interface": "freehop0", "wg_endpoint": "1.2.3.4:51820", "wg_handshake": "recent", "exit_ip": "5.6.7.8", "proxy": {"url": "http://10.200.0.2:18080", "http_code": "200"}, "units": {"proxy": "active", "watch_timer": "active"}, "last_rotate": {"server": "JP-FREE#25", "exit_ip": "5.6.7.8"}}
+{"egress_method": "proton", "netns": "present", "wg_interface": "freehop0", "wg_endpoint": "1.2.3.4:51820", "wg_handshake": "recent", "exit_ip": "5.6.7.8", "upstream": "direct", "proxy": {"url": "http://10.200.0.2:18080", "http_code": "200"}, "units": {"proxy": "active", "watch_timer": "active"}, "last_rotate": {"server": "JP-FREE#25", "exit_ip": "5.6.7.8", "method": "proton"}}
 ```
 
-`doctor --json` shape: `{"checks": [{"name": "...", "ok": true, "hint": ""}], "ok": 14, "failed": 0}`. A failed check names its fix in `hint`.
+`upstream` is `direct` for proton, `socks5:host:port` for tor, and `http:host:port` or `socks5:host:port` for proxy-pool. `wg_handshake` is `n/a` when the method is not proton.
 
-`rotate --json` shape: `{"server": "JP-FREE#25", "exit_ip": "5.6.7.8", "rotated_at": 1793000000}`. With `--dry-run` the exit IP is `null` and nothing changes.
+`doctor --json` shape: `{"checks": [{"name": "...", "ok": true, "hint": ""}], "ok": 14, "failed": 0}`. A failed check names its fix in `hint`. The checks run are the ones for the configured method.
+
+`rotate --json` shape: `{"method": "proton", "server": "JP-FREE#25", "exit_ip": "5.6.7.8", "rotated_at": 1793000000}`. With `--dry-run` the exit IP is `null` and nothing changes. For tor, `server` is `tor`; for proxy-pool, `server` is `proxy-pool` and the state also records `upstream`.
 
 ## Workflows
 
-**Gateway returns 429.** Run `freehop doctor --json` first. If the tunnel checks pass, run `freehop rotate --json` once, then re-test the gateway. If the rotate succeeds but the gateway still answers 429, the new exit was already burned; rotate once more. Do not rotate in a loop: the budget is 6 per hour and 20 per day.
+**Gateway returns 429.** Run `freehop doctor --json` first. If the tunnel checks pass, run `freehop rotate --json` once, then re-test the gateway. If the rotate succeeds but the gateway still answers 429, the new exit was already burned; rotate once more. Do not rotate in a loop: the budget is 6 per hour and 20 per day. For `tor`, a rotate can fail when NEWNYM is rate-limited; wait and let the watcher retry. For `proxy-pool`, a rotate that fails means the next upstream was dead; the pointer already advanced, so the next rotate tries the following one.
 
-**Tunnel dead.** `freehop status --json` shows `wg_handshake: none` and the proxy unreachable. Run `freehop rotate --json`; the watcher would do this itself within 5 minutes, so a manual rotate is only needed when you cannot wait.
+**Tunnel dead.** `freehop status --json` shows the proxy unreachable and, for proton, `wg_handshake: none`. Run `freehop rotate --json`; the watcher would do this itself within 5 minutes, so a manual rotate is only needed when you cannot wait.
 
 **Fresh install.** Run the installer, then `freehop doctor --json`. Every check must pass. If `certificate fetched` fails, run `freehop rotate` once.
 
@@ -102,10 +109,12 @@ freehop setup | teardown          # build or remove the namespace
 - `ip netns list` prints `name (id: N)`. Never match the bare name with an exact-line grep; compare the first field.
 - Never `pkill -f` with a pattern that appears in your own invoking command. It matches your own shell and kills it (SIGTERM). Kill by explicit PID, or let `ip netns delete` kill what is inside the namespace.
 - The proxy's absolute-URI path requires an explicit port or defaults to 80. `CONNECT` (https) is the common path and always carries a port.
+- `curl -x` silently bypasses the proxy for hosts in `no_proxy`. Every `curl -x` in this project passes `--noproxy ''` so the check really goes through the proxy; do the same in any new check.
+- A plain http request through an HTTP upstream must NOT open a `CONNECT` tunnel first. The upstream gets the absolute-URI request on a plain connection; `CONNECT` is only for the https case. Sending both mangles the path the target sees.
 
 ## Safety
 
-- Rotating the exit is safe and reversible. It only swaps the WireGuard peer.
+- Rotating the exit is safe and reversible. For proton it only swaps the WireGuard peer; for tor it only sends NEWNYM; for proxy-pool it only advances the upstream pointer.
 - Do not change the gateway's proxy configuration, restart gateway services, or edit the live gateway without the user asking. The `POST_ROTATE_HOOK` in the config is the approved place for a restart, and it runs only after a successful rotate.
 - Never print, log, or commit credentials. FreeHop reads the Proton keyring and any gateway key from local files at runtime and never prints them. If a log line contains a secret, redact it before sharing.
 - Do not install FreeHop on a machine you do not own or administer.

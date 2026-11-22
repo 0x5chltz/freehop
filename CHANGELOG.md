@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.0 (2026-11-22)
+
+- Egress methods: `EGRESS_METHOD` in the config picks the exit. `proton` (default) keeps the WireGuard flow. `tor` sends `SIGNAL NEWNYM` to the Tor control port and verifies the exit IP changed (up to 3 attempts); the proxy chains through Tor's SOCKS port, managed by `freehop-tor.service`. `proxy-pool` round-robins over `PROXY_POOL` (your own `http://` or `socks5://` upstreams); a dead entry fails the rotate and is skipped next time because the pointer already advanced. The proxy reads `$STATE_DIR/upstream.json` on every connection, so a rotate takes effect without a restart.
+- Watcher health check is method-aware: for tor it tests the SOCKS port from inside the namespace instead of a direct egress that can never work there. `freehop status --json` now reports `egress_method`, `upstream`, and `last_rotate.method`; `freehop rotate --json` reports `method`. `doctor` runs the checks for the configured method only. The installer checks the prerequisites for the configured method (Proton keyring only for proton, `tor` only for tor, non-empty pool only for proxy-pool). `EXIT_IP_URL` is now configurable (default `https://api.ipify.org`).
+- Fixes found by testing: the proxy used to send a `CONNECT` to an HTTP upstream before a plain http request, which lost the request path (the upstream saw the absolute URI as a raw tunnel and answered the wrong path); plain requests now open a plain connection to the HTTP upstream. And `curl -x` silently bypassed the proxy for hosts in `no_proxy`, which made the exit-IP check and the doctor's proxy check lie; every `curl -x` in the project now passes `--noproxy ''`.
+- Not implemented on purpose: WARP (tested on this VPS, both shared egress IPs were already 429) and IPv6 /64 rotation (this VPS has no IPv6 at all, verified). Client-side lockout clearing (the imitated project's `drafts.sqlite` step) is deliberately not copied; FreeHop only rotates the network exit.
+- Tested in the sandbox with a local target server, a dummy HTTP upstream, and a fake Tor daemon (SOCKS5 + control port stand-in): http and https through the chain, pool round-robin, dead pool entry failing cleanly, NEWNYM flipping the exit IP, doctor's tor checks, CLI and MCP JSON shapes. A real Tor daemon bootstrap was NOT tested here: `apt-get update` in the sandbox took over 10 minutes on a slow mirror and tor never installed, and the VPS has no tor. The Tor method's code paths are verified against the stand-in; a real Tor exit change is still unproven.
+- The multi-egress idea follows ShadowySphinX/Opencode-Unlimited-Limit-Bypass-, the project openhop is also based on (credited in the README).
+
 ## v0.3.4 (2026-11-22)
 
 - README FAQ: 9Router already has proxy pools, FreeHop is the source of fresh exits that fills them, not a competing router.

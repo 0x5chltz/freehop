@@ -33,8 +33,11 @@ def load_config():
 
 
 CFG = load_config()
+METHOD = CFG("EGRESS_METHOD", "proton")
 NETNS = CFG("NETNS", "freehop")
 NS_IP = CFG("NS_IP", "10.200.0.2")
+HOST_IP = CFG("HOST_IP", "10.200.0.1")
+TOR_SOCKS_PORT = CFG("TOR_SOCKS_PORT", "9050")
 PROXY_PORT = CFG("PROXY_PORT", "18080")
 STATE_DIR = CFG("STATE_DIR", "~/.local/share/freehop")
 LOG = os.path.join(STATE_DIR, "watch.log")
@@ -98,14 +101,22 @@ def probe(cmd, timeout=15):
     except Exception:
         return False
 
+def inside_ok():
+    # The "inside" path depends on the method. Proton and proxy-pool have
+    # a direct route out of the ns (wg, or veth default). Tor has neither:
+    # the only way out of the ns is Tor's SOCKS port on-link at HOST_IP.
+    if METHOD == "tor":
+        return probe(["sudo", "-n", "ip", "netns", "exec", NETNS, "curl", "--socks5-hostname", f"{HOST_IP}:{TOR_SOCKS_PORT}", "-s", "-m", "10", "-o", "/dev/null", "-w", "%{http_code}", "https://www.google.com/"])
+    return probe(["sudo", "-n", "ip", "netns", "exec", NETNS, "curl", "-s", "-m", "10", "-o", "/dev/null", "-w", "%{http_code}", "https://www.google.com/"])
+
 def tunnel_dead():
     # Dead only if BOTH tunnel paths fail while the default namespace
     # still reaches the internet. A single-path failure (proxy process
     # down, one flaky endpoint) must not rotate, and no internet at all
     # must not rotate either. One retest guards against a blip.
     def check():
-        inside = probe(["sudo", "-n", "ip", "netns", "exec", NETNS, "curl", "-s", "-m", "10", "-o", "/dev/null", "-w", "%{http_code}", "https://www.google.com/"])
-        via_proxy = probe(["curl", "-x", PROXY_URL, "-s", "-m", "10", "-o", "/dev/null", "-w", "%{http_code}", "https://www.google.com/"])
+        inside = inside_ok()
+        via_proxy = probe(["curl", "--noproxy", "", "-x", PROXY_URL, "-s", "-m", "10", "-o", "/dev/null", "-w", "%{http_code}", "https://www.google.com/"])
         direct = probe(["curl", "-s", "-m", "10", "-o", "/dev/null", "-w", "%{http_code}", "https://www.google.com/"])
         return inside, via_proxy, direct
     inside, via_proxy, direct = check()

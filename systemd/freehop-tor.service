@@ -1,0 +1,14 @@
+[Unit]
+Description=FreeHop Tor daemon (egress for the tor method)
+After=network-online.target freehop-setup.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/freehop/config
+ExecStart=/usr/bin/tor --SocksPort ${HOST_IP}:${TOR_SOCKS_PORT} --ControlPort 127.0.0.1:9051 --DataDirectory %h/.local/share/freehop/tor --RunAsDaemon 0
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

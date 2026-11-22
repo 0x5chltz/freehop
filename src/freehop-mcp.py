@@ -22,7 +22,7 @@ import os
 import subprocess
 import sys
 
-VERSION = "0.2.0"
+VERSION = "0.4.0"
 PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
 
 PREFIX = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,8 +32,8 @@ TOOLS = [
     {
         "name": "freehop_status",
         "description": (
-            "Current FreeHop state: namespace, WireGuard endpoint and "
-            "handshake, exit IP, proxy health, unit states, last rotate. "
+            "Current FreeHop state: egress method, namespace, exit IP, "
+            "upstream, proxy health, unit states, last rotate. "
             "Read-only."
         ),
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -50,12 +50,13 @@ TOOLS = [
     {
         "name": "freehop_rotate",
         "description": (
-            "Rotate the Proton exit now: pick the lowest-load free server "
-            "different from the current one, swap the WireGuard peer, "
-            "restart the session agent, verify the new exit IP. Safe and "
-            "reversible, but it changes the gateway's egress IP. With "
-            "dry_run true, only show which server would be picked and "
-            "change nothing."
+            "Rotate the egress now. Proton picks the lowest-load free "
+            "server different from the current one and swaps the "
+            "WireGuard peer; tor sends SIGNAL NEWNYM and verifies the "
+            "exit IP changed; proxy-pool advances to the next upstream. "
+            "Safe and reversible, but it changes the gateway's egress IP. "
+            "With dry_run true, only show what would happen and change "
+            "nothing."
         ),
         "inputSchema": {
             "type": "object",
