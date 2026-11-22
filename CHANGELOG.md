@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.2 (2026-11-22)
+
+- README: logo section tells people to edit `assets/logo.svg` in VectorCraft, with the mark's construction (circles, arc, tile) so it can be rebuilt there.
+
 ## v0.2.1 (2026-11-22)
 
 - Logo: `assets/logo.svg` (source) and `assets/logo.png` (512px render). One trajectory hopping through three exits, emerald tile, white mark. README now shows it with badges, and the install and commands sections are current (`--yes`, `~/.local/bin`, `--json`, `freehop mcp`).
