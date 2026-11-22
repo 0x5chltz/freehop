@@ -100,6 +100,29 @@ FreeHop is built to be driven by an agent, not just a human at a terminal.
 - `freehop doctor --json` is the first thing to run when something is wrong; each failed check names the fix.
 - Never print credentials. FreeHop never prints them either.
 
+## MCP server
+
+For agents that speak MCP, FreeHop ships a stdio MCP server (Python stdlib only, no dependencies). It only invokes the FreeHop CLI with fixed arguments, never runs arbitrary commands, and never prints credentials. Teardown is deliberately not exposed: removing the tunnel is a human decision.
+
+```bash
+freehop mcp   # prints the client config JSON for your machine
+```
+
+Add it to your client (Claude Code: `.mcp.json` in the project, Claude Desktop: `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "freehop": {
+      "command": "python3",
+      "args": ["/home/you/.local/share/freehop/src/freehop-mcp.py"]
+    }
+  }
+}
+```
+
+Tools: `freehop_status`, `freehop_doctor`, `freehop_rotate` (`dry_run` boolean), `freehop_logs`. See `skills/freehop/SKILL.md` for the workflows.
+
 ## Troubleshooting
 
 - **First connect after a peer swap fails with APIError 86203 "session not found".** Known Proton race, the agent is retried up to 3 times with the same certificate before the rotate gives up.

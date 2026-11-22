@@ -4,7 +4,7 @@
 # JSON object. Exit 0 means ok, 1 means failed, 2 means usage error.
 # Human-readable output is the default. All commands are idempotent and
 # non-interactive.
-# Usage: freehop status [--json]|rotate [--dry-run|--json]|doctor [--json]|logs|setup|teardown|help
+# Usage: freehop status [--json]|rotate [--dry-run|--json]|doctor [--json]|logs|mcp|setup|teardown|help
 set -euo pipefail
 PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${FREEHOP_CONFIG:-$HOME/.config/freehop/config}"
@@ -32,7 +32,9 @@ gather_status() {
     WG_HANDSHAKE="none"
   fi
   EXIT_IP="$(sudo -n ip netns exec "$NETNS" curl -s --max-time 10 https://api.ipify.org 2>/dev/null || true)"
-  PROXY_CODE="$(curl -s -m 5 -x "http://$NS_IP:$PROXY_PORT" -o /dev/null -w "%{http_code}" https://www.google.com/ 2>/dev/null || echo 000)"
+  # curl prints 000 itself on failure, so do not add another one with ||.
+  PROXY_CODE="$(curl -s -m 5 -x "http://$NS_IP:$PROXY_PORT" -o /dev/null -w "%{http_code}" https://www.google.com/ 2>/dev/null || true)"
+  [ -z "$PROXY_CODE" ] && PROXY_CODE="000"
   UNIT_PROXY="$(unit_state freehop-proxy.service)"
   UNIT_TIMER="$(unit_state freehop-watch.timer)"
   LAST_SERVER=""; LAST_EXIT=""
@@ -115,6 +117,13 @@ cmd_doctor() {
   [ "$fail" -eq 0 ]
 }
 
+cmd_mcp() {
+  # Print the MCP client config for this machine (paste into the client's
+  # mcpServers). The server is src/freehop-mcp.py, stdio, stdlib only.
+  local mcp="$PREFIX/src/freehop-mcp.py"
+  printf '{\n  "mcpServers": {\n    "freehop": {\n      "command": "python3",\n      "args": [%s]\n    }\n  }\n}\n' "$(esc "$mcp")"
+}
+
 cmd_logs() {
   tail -n 50 "$STATE_DIR/watch.log" 2>/dev/null || echo "no watch log yet"
   echo "--- proxy unit ---"
@@ -126,7 +135,8 @@ case "${1:-help}" in
   rotate) shift; python3 "$PREFIX/src/freehop-rotate.py" "$@" ;;
   doctor) shift; cmd_doctor "$@" ;;
   logs) cmd_logs ;;
+  mcp) cmd_mcp ;;
   setup) "$PREFIX/scripts/freehop-netns.sh" setup ;;
   teardown) "$PREFIX/scripts/freehop-netns.sh" teardown ;;
-  help|*) echo "usage: freehop status [--json]|rotate [--dry-run|--json]|doctor [--json]|logs|setup|teardown"; [ "${1:-help}" = "help" ] && exit 0 || exit 2 ;;
+  help|*) echo "usage: freehop status [--json]|rotate [--dry-run|--json]|doctor [--json]|logs|mcp|setup|teardown"; [ "${1:-help}" = "help" ] && exit 0 || exit 2 ;;
 esac

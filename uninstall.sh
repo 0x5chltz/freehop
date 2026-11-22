@@ -13,6 +13,7 @@ rm -f "$HOME/.config/systemd/user/freehop-proxy.service" \
       "$HOME/.config/systemd/user/freehop-setup.service"
 systemctl --user daemon-reload 2>/dev/null || true
 rm -rf "$PREFIX"
+rm -f "$HOME/.local/bin/freehop"
 if [ "${1:-}" = "--purge" ]; then
   rm -f "$CONFIG"
   rm -rf "$HOME/.local/share/freehop"

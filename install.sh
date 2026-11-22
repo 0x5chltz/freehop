@@ -41,6 +41,8 @@ cp "$SRC/systemd/"* "$PREFIX/systemd/"
 cp "$SRC/systemd/"*.service "$SRC/systemd/"*.timer "$HOME/.config/systemd/user/"
 [ -f "$SRC/examples/test-9router.py" ] && cp "$SRC/examples/test-9router.py" "$PREFIX/examples/" || true
 chmod +x "$PREFIX/src/"*.py "$PREFIX/scripts/"*
+mkdir -p "$HOME/.local/bin"
+ln -sf "$PREFIX/scripts/freehop" "$HOME/.local/bin/freehop"
 [ -f "$CONFIG" ] || cp "$SRC/freehop.conf.example" "$CONFIG"
 sed -i "s|^PREFIX=.*|PREFIX=$PREFIX|" "$CONFIG"
 
@@ -60,3 +62,5 @@ echo
 "$PREFIX/scripts/freehop" doctor || true
 echo
 echo "FreeHop installed. Try: freehop status"
+echo "MCP server: freehop mcp (prints the client config)"
+echo "Make sure ~/.local/bin is on your PATH."

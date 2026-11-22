@@ -59,6 +59,10 @@ TEST_CMD=python3 ~/.local/share/freehop/examples/test-9router.py
 
 Point the gateway at the proxy with `HTTP_PROXY=http://10.200.0.2:18080` and `HTTPS_PROXY` the same, `NO_PROXY=127.0.0.1,localhost`. See `examples/9router-proxy.conf` for the systemd drop-in shape.
 
+## MCP
+
+If your host speaks MCP, prefer the MCP server over the CLI: add it with the config from `freehop mcp` (or `examples/mcp-config.json`). Tools: `freehop_status`, `freehop_doctor`, `freehop_rotate` (`dry_run`), `freehop_logs`. The same rules apply: rotate is safe and reversible, dry-run first when you only need the target, and never change the gateway's proxy config or restart services without the user asking. If MCP is not available, use the CLI with `--json`.
+
 ## Commands (all take --json)
 
 Exit codes: 0 ok, 1 failed, 2 usage error. JSON output is one object on stdout; progress and warnings go to stderr. All commands are idempotent and non-interactive.
