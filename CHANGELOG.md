@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.4 (2026-11-22)
+
+- README FAQ: 9Router already has proxy pools, FreeHop is the source of fresh exits that fills them, not a competing router.
+
 ## v0.3.3 (2026-11-22)
 
 - The 9Router + OpenCode stack is now named everywhere: README intro, skill file description and intro, and the GitHub repo description and topics.

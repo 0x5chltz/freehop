@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.3.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.3.4-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -37,6 +37,12 @@ your gateway ──HTTP_PROXY──> [forward proxy 10.200.0.2:18080]
 ## Why Proton, not WARP
 
 We tested WARP first (Cloudflare's egress is what openhop hops). Both WARP exit IPs we tried were already over the OpenCode free limit before we sent anything: shared egress IPs are pre-burned for that tier, at least from a VPS. Proton Free exits are per-server and empirically still go clean after a rotate. WARP stays a fine idea on a desktop with a different IP pool; on this VPS it was not viable. Your mileage may vary, which is why the proxy is just a proxy: point it at any exit you trust.
+
+## FAQ
+
+### Doesn't 9Router already have proxy pools?
+
+Yes. A proxy pool is a place to put proxies, not a source of fresh IPs. The OpenCode free limit is effectively per exit IP, so the pool still needs an exit that is not burned yet. FreeHop supplies and rotates those exits: a Proton Free exit, swapped automatically when the gateway answers 429 or the tunnel dies, with a restart and a test after each rotate. Point 9Router at FreeHop with HTTP_PROXY and the two work together, 9Router keeps doing the routing, FreeHop keeps the exit fresh.
 
 ## Requirements
 
