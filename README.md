@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.5.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.5.1-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -190,6 +190,7 @@ Tools: `freehop_status`, `freehop_doctor`, `freehop_rotate` (`dry_run` boolean),
 ## Troubleshooting
 
 - **First connect after a peer swap fails with APIError 86203 "session not found".** Known Proton race, the agent is retried up to 3 times with the same certificate before the rotate gives up.
+- **Agent dies with BrokenPipe shortly after connect.** The Proton server closes the local-agent session soon after connect; the agent reconnects by itself with backoff, and the watcher restarts it if the process itself is gone. The tunnel is unaffected while the agent is down (WireGuard keepalive holds it), so a dead agent alone is not a tunnel failure. Check `freehop doctor` ("agent alive") and the timestamps in `agent.log`.
 - **Exit burns in under an hour.** Normal for free servers under gateway load. The watcher budget (6/hour, 20/day) is the guardrail; the daily reset at 00:00 UTC is the backstop.
 - **Proxy answers but the gateway still gets 429.** The exit was already burned. `freehop rotate` once and check `freehop doctor`.
 - **Nothing works after a reboot.** `freehop-setup.service` rebuilds the namespace on boot. Check `systemctl --user status freehop-setup.service`.

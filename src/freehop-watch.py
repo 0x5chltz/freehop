@@ -197,6 +197,49 @@ def tunnel_dead():
     log("tunnel dead (inside-ns and proxy egress both fail, default ns OK)")
     return True
 
+def ensure_agent_alive():
+    """Proton only: restart the session agent if the process itself is
+    gone. The agent now reconnects in-process when the server closes
+    the session, so a missing process means a real crash/kill, not a
+    normal close. Restarts it with the current domain from
+    rotate-state.json, without touching the WireGuard peer (this is a
+    restart, not a rotate: no budget, no hook, no gateway test). A 10s
+    re-check guards the brief dead window while a rotate is
+    (re)starting the agent, so a tick landing mid-rotate does not
+    start a second one. Failures are logged, never fatal to the tick."""
+    if METHOD != "proton":
+        return
+    try:
+        rc, _, _ = run(["pgrep", "-f", "freehop-agent.py"])
+        if rc == 0:
+            return
+    except Exception:
+        return
+    time.sleep(10)
+    try:
+        rc, _, _ = run(["pgrep", "-f", "freehop-agent.py"])
+        if rc == 0:
+            return
+    except Exception:
+        return
+    try:
+        domain = json.load(open(os.path.join(STATE_DIR, "rotate-state.json"))).get("domain", "")
+    except Exception:
+        domain = ""
+    if not domain:
+        log("agent process missing but no domain in rotate-state.json, skip restart")
+        return
+    log(f"agent process missing, restarting for {domain}")
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("freehop_rotate", os.path.join(_HERE, "freehop-rotate.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.start_agent(domain)
+        log("agent restarted")
+    except Exception as e:
+        log(f"agent restart failed: {e}")
+
 def acquire_lock():
     """Non-blocking lock so two watch runs never overlap (a run with a
     429 confirm + rotate + retried test can outlast the 5-minute timer).
@@ -223,6 +266,7 @@ def main():
         st["day_count"] = 0; st["day_start"] = today; st["consec_fail"] = 0
     if now - st.get("hour_start", 0) >= 3600:
         st["hour_count"] = 0; st["hour_start"] = now
+    ensure_agent_alive()
     if not force:
         reason = None
         if has_limit_recent():

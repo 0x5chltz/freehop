@@ -106,6 +106,7 @@ cmd_doctor() {
       check "proton vpn library" "python3 -c \"import sys; sys.path.insert(0,'/usr/lib/python3/dist-packages'); import proton.vpn\"" "install the official Proton VPN Linux client"
       check "proton keyring present" "ls $KEYRING_GLOB >/dev/null 2>&1" "log in once with the Proton VPN client"
       check "certificate fetched" "test -f $STATE_DIR/cert.json" "run: freehop rotate"
+      check "agent alive" "pgrep -f freehop-agent.py >/dev/null" "agent process dead, run: freehop rotate (restarts the agent)"
       check "wg interface up" "sudo -n ip netns exec $NETNS ip link show $WG_IF 2>/dev/null | grep -q UP" "run: freehop setup"
       check "wg handshake recent" "sudo -n ip netns exec $NETNS wg show $WG_IF 2>/dev/null | grep -q 'latest handshake'" "run: freehop rotate"
       check "inside-ns egress" "sudo -n ip netns exec $NETNS curl -s -m 10 -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200" "tunnel dead, run: freehop rotate"
