@@ -84,6 +84,25 @@ PROBE_CMD=
 # Seconds between the first 429 probe and the confirming probe.
 PROBE_CONFIRM_SECS=120
 
+# Gateway mode: which egress the gateway uses by default.
+# proxy (default): the gateway always runs behind the FreeHop proxy;
+#   the watcher only rotates the exit on a confirmed 429.
+# direct: the gateway runs on the host's own IP, FreeHop is the
+#   fallback. On a confirmed 429 the watcher switches the gateway to
+#   the proxy (restores the drop-in, restarts the gateway, no rotate
+#   spent); while on the proxy it tries returning to direct every
+#   RETURN_CHECK_MINS once the gateway is healthy. A failed return
+#   restores the proxy, so the gateway is never stranded. The tunnel
+#   stays up in both modes (it is the fallback), so doctor still
+#   checks it. Needs GATEWAY_DROPIN to point at the gateway's proxy
+#   drop-in (example: 9Router's freehop-proxy.conf) and GATEWAY_SERVICE
+#   to be the gateway's user service.
+GATEWAY_MODE=proxy
+GATEWAY_SERVICE=9router.service
+GATEWAY_DROPIN=~/.config/systemd/user/9router.service.d/freehop-proxy.conf
+# Minutes between return-to-direct attempts while on the proxy.
+RETURN_CHECK_MINS=30
+
 # Rotate limits (same shape as the production setup that ran this nightly)
 MIN_INTERVAL_MIN=10
 MAX_PER_HOUR=6

@@ -11,6 +11,7 @@ CONFIG="${FREEHOP_CONFIG:-$HOME/.config/freehop/config}"
 NETNS="freehop"; NS_IP="10.200.0.2"; PROXY_PORT="18080"; STATE_DIR="$HOME/.local/share/freehop"
 WG_IF="freehop0"; KEYRING_GLOB="$HOME/.config/Proton/keyring-proton-sso-account-*.json"
 WATCH_UNIT=""; TEST_CMD=""; PROBE_CMD=""; EGRESS_METHOD="proton"; TOR_CONTROL="127.0.0.1:9051"; TOR_SOCKS_PORT="9050"; HOST_IP="10.200.0.1"; PROXY_POOL=""
+GATEWAY_MODE="proxy"; GATEWAY_DROPIN="$HOME/.config/systemd/user/9router.service.d/freehop-proxy.conf"
 if [ -f "$CONFIG" ]; then set -a; . "$CONFIG"; set +a; fi
 
 # JSON-escape one value (prints it quoted).
@@ -53,6 +54,12 @@ gather_status() {
     LAST_EXIT="$(python3 -c "import json; print(json.load(open('$STATE_DIR/rotate-state.json')).get('exit_ip',''))" 2>/dev/null || true)"
     LAST_METHOD="$(python3 -c "import json; print(json.load(open('$STATE_DIR/rotate-state.json')).get('method','$EGRESS_METHOD'))" 2>/dev/null || echo "$EGRESS_METHOD")"
   fi
+  # Gateway mode (direct = host IP, proxy = FreeHop) is recorded by the
+  # watcher in watch-state.json; fall back to the configured mode.
+  GATEWAY_MODE_STATE="$GATEWAY_MODE"
+  if [ -f "$STATE_DIR/watch-state.json" ]; then
+    GATEWAY_MODE_STATE="$(python3 -c "import json; print(json.load(open('$STATE_DIR/watch-state.json')).get('gateway_mode','$GATEWAY_MODE'))" 2>/dev/null || echo "$GATEWAY_MODE")"
+  fi
 }
 
 cmd_status() {
@@ -60,8 +67,8 @@ cmd_status() {
   [ "${1:-}" = "--json" ] && json=1
   gather_status
   if [ "$json" -eq 1 ]; then
-    printf '{"egress_method": %s, "netns": %s, "wg_interface": %s, "wg_endpoint": %s, "wg_handshake": %s, "exit_ip": %s, "upstream": %s, "proxy": {"url": %s, "http_code": %s}, "units": {"proxy": %s, "watch_timer": %s}, "last_rotate": {"server": %s, "exit_ip": %s, "method": %s}}\n' \
-      "$(esc "$EGRESS_METHOD")" "$(esc "$NS_STATE")" "$(esc "$WG_IF")" "$(esc "$WG_ENDPOINT")" "$(esc "$WG_HANDSHAKE")" "$(esc "$EXIT_IP")" "$(esc "$UPSTREAM")" \
+    printf '{"egress_method": %s, "gateway_mode": %s, "netns": %s, "wg_interface": %s, "wg_endpoint": %s, "wg_handshake": %s, "exit_ip": %s, "upstream": %s, "proxy": {"url": %s, "http_code": %s}, "units": {"proxy": %s, "watch_timer": %s}, "last_rotate": {"server": %s, "exit_ip": %s, "method": %s}}\n' \
+      "$(esc "$EGRESS_METHOD")" "$(esc "$GATEWAY_MODE_STATE")" "$(esc "$NS_STATE")" "$(esc "$WG_IF")" "$(esc "$WG_ENDPOINT")" "$(esc "$WG_HANDSHAKE")" "$(esc "$EXIT_IP")" "$(esc "$UPSTREAM")" \
       "$(esc "http://$NS_IP:$PROXY_PORT")" "$(esc "$PROXY_CODE")" \
       "$(esc "$UNIT_PROXY")" "$(esc "$UNIT_TIMER")" \
       "$(esc "$LAST_SERVER")" "$(esc "$LAST_EXIT")" "$(esc "$LAST_METHOD")"
@@ -69,6 +76,7 @@ cmd_status() {
   fi
   echo "== FreeHop status =="
   echo "egress method: $EGRESS_METHOD (upstream: $UPSTREAM)"
+  echo "gateway mode: $GATEWAY_MODE_STATE"
   "$PREFIX/scripts/freehop-netns.sh" status
   echo -n "proxy $NS_IP:$PROXY_PORT: "
   if [ "$PROXY_CODE" = "200" ]; then echo "200 OK"; else echo "unreachable"; fi
@@ -87,6 +95,17 @@ check() {
   fi
 }
 
+# The watcher's recorded gateway mode must match the gateway's actual
+# proxy drop-in: direct mode = drop-in moved aside, proxy mode = drop-in
+# present. No state file yet (fresh install, watcher never ran) passes
+# vacuously; the watcher initialises the mode from GATEWAY_MODE.
+gateway_mode_consistent() {
+  [ -f "$STATE_DIR/watch-state.json" ] || return 0
+  local mode
+  mode="$(python3 -c "import json; print(json.load(open('$STATE_DIR/watch-state.json')).get('gateway_mode','$GATEWAY_MODE'))" 2>/dev/null || echo "$GATEWAY_MODE")"
+  if [ "$mode" = "direct" ]; then [ ! -f "$GATEWAY_DROPIN" ]; else [ -f "$GATEWAY_DROPIN" ]; fi
+}
+
 cmd_doctor() {
   local json=0
   [ "${1:-}" = "--json" ] && json=1
@@ -100,6 +119,7 @@ cmd_doctor() {
   check "proxy egress" "curl -s -m 10 --noproxy '' -x http://$NS_IP:$PROXY_PORT -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200" "check freehop-proxy.service, run: freehop logs"
   check "proxy unit active" "systemctl --user is-active -q freehop-proxy.service" "run: systemctl --user start freehop-proxy.service"
   check "watch timer active" "systemctl --user is-active -q freehop-watch.timer" "run: systemctl --user start freehop-watch.timer"
+  check "gateway mode consistent" "gateway_mode_consistent" "watch-state gateway_mode disagrees with the gateway drop-in; check freehop logs"
   case "$EGRESS_METHOD" in
     proton)
       check "wg" "command -v wg" "install wireguard"

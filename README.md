@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.5.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.6.0-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -101,6 +101,9 @@ Edit `~/.config/freehop/config`. The important knobs:
 | `WATCH_PATTERN` | `FreeUsageLimitError` | the journal text that means "free limit hit" |
 | `PROBE_CMD` | (empty) | command that prints the gateway HTTP status (200, 429, ...); the primary 429 signal |
 | `PROBE_CONFIRM_SECS` | `120` | seconds between the first 429 probe and the confirming probe |
+| `GATEWAY_MODE` | `proxy` | `proxy` (gateway always behind FreeHop) or `direct` (gateway on the host IP, FreeHop as fallback) |
+| `GATEWAY_SERVICE` / `GATEWAY_DROPIN` | `9router.service` / `~/.config/systemd/user/9router.service.d/freehop-proxy.conf` | gateway user service and its proxy drop-in, used for mode switches |
+| `RETURN_CHECK_MINS` | `30` | minutes between return-to-direct attempts while on the proxy |
 | `POST_ROTATE_HOOK` | (empty) | command after a rotate, e.g. `systemctl --user restart 9router.service` |
 | `TEST_CMD` | (empty) | command whose exit 0 means the gateway works again |
 | `MIN_INTERVAL_MIN` / `MAX_PER_HOUR` / `MAX_PER_DAY` | 10 / 6 / 20 | rotate budget |
@@ -116,6 +119,10 @@ TEST_CMD=python3 ~/.local/share/freehop/examples/test-9router.py
 ```
 
 Point your gateway at the proxy with `HTTP_PROXY=http://10.200.0.2:18080` (and `HTTPS_PROXY` the same, `NO_PROXY=127.0.0.1,localhost`). For 9Router, the drop-in in `examples/9router-proxy.conf` shows the shape.
+
+## Gateway mode
+
+By default the gateway always runs behind the FreeHop proxy (`GATEWAY_MODE=proxy`). With `GATEWAY_MODE=direct` the gateway runs on the host's own IP and FreeHop is only the fallback: on a confirmed 429 the watcher restores the proxy drop-in and restarts the gateway (no rotate spent, the current exit is healthy), and while on the proxy it tries returning to direct every `RETURN_CHECK_MINS` once the gateway is healthy. A failed return restores the proxy, so the gateway is never stranded. The free limit is a time window, not a permanent burn: the host IP that was limited five days ago answered 200 again on the live VPS, which is why direct-first is worth doing. The tunnel stays up in direct mode (it is the fallback), so `freehop doctor` still checks it, and `freehop status` reports the current `gateway_mode`.
 
 ## Commands
 
@@ -193,6 +200,7 @@ Tools: `freehop_status`, `freehop_doctor`, `freehop_rotate` (`dry_run` boolean),
 - **Agent dies with BrokenPipe shortly after connect.** The Proton server closes the local-agent session soon after connect; the agent reconnects by itself with backoff, and the watcher restarts it if the process itself is gone. The tunnel is unaffected while the agent is down (WireGuard keepalive holds it), so a dead agent alone is not a tunnel failure. Check `freehop doctor` ("agent alive") and the timestamps in `agent.log`.
 - **Exit burns in under an hour.** Normal for free servers under gateway load. The watcher budget (6/hour, 20/day) is the guardrail; the daily reset at 00:00 UTC is the backstop.
 - **Proxy answers but the gateway still gets 429.** The exit was already burned. `freehop rotate` once and check `freehop doctor`.
+- **Doctor reports "gateway mode consistent" failed.** The recorded mode in `watch-state.json` disagrees with the gateway's proxy drop-in on disk (a mode switch was interrupted, or someone moved the drop-in by hand). Check `freehop logs`, then restore the drop-in to match the recorded mode, or delete the state file's `gateway_mode` so the watcher re-initialises it from `GATEWAY_MODE`.
 - **Nothing works after a reboot.** `freehop-setup.service` rebuilds the namespace on boot. Check `systemctl --user status freehop-setup.service`.
 - **Certificate expired.** The rotate script refreshes it automatically when a rotate runs near expiry (refresh time is checked first).
 

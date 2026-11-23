@@ -51,6 +51,9 @@ The installer checks tools, the prerequisites for the configured `EGRESS_METHOD`
 | `WATCH_PATTERN` | `FreeUsageLimitError` | journal text that means "free limit hit" |
 | `PROBE_CMD` | (empty) | command that prints the gateway HTTP status (200, 429, ...); the primary 429 signal |
 | `PROBE_CONFIRM_SECS` | `120` | seconds between the first 429 probe and the confirming probe |
+| `GATEWAY_MODE` | `proxy` | `proxy` (gateway always behind FreeHop) or `direct` (gateway on the host IP, FreeHop as fallback) |
+| `GATEWAY_SERVICE` / `GATEWAY_DROPIN` | `9router.service` / `~/.config/systemd/user/9router.service.d/freehop-proxy.conf` | gateway user service and its proxy drop-in, used for mode switches |
+| `RETURN_CHECK_MINS` | `30` | minutes between return-to-direct attempts while on the proxy |
 | `POST_ROTATE_HOOK` | (empty) | command after a rotate, e.g. `systemctl --user restart 9router.service` |
 | `TEST_CMD` | (empty) | command whose exit 0 means the gateway works again |
 | `MIN_INTERVAL_MIN` / `MAX_PER_HOUR` / `MAX_PER_DAY` | 10 / 6 / 20 | rotate budget |
@@ -66,6 +69,10 @@ TEST_CMD=python3 ~/.local/share/freehop/examples/test-9router.py
 ```
 
 Point the gateway at the proxy with `HTTP_PROXY=http://10.200.0.2:18080` and `HTTPS_PROXY` the same, `NO_PROXY=127.0.0.1,localhost`. See `examples/9router-proxy.conf` for the systemd drop-in shape.
+
+## Gateway mode
+
+`GATEWAY_MODE=direct` runs the gateway on the host's own IP with FreeHop as the fallback: on a confirmed 429 the watcher restores the proxy drop-in and restarts the gateway (no rotate spent), and while on the proxy it tries returning to direct every `RETURN_CHECK_MINS` once the gateway is healthy. A failed return restores the proxy. The mode lives in `watch-state.json` (`gateway_mode`); `freehop status --json` reports it and `doctor` checks it matches the drop-in on disk (20 checks). The tunnel stays up in direct mode as the fallback, so doctor still checks it. The free limit is a time window, not a permanent burn: a host IP limited days ago can answer 200 again.
 
 ## MCP
 

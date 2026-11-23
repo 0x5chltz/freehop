@@ -16,6 +16,19 @@ Triggers (any one rotates):
      tiny completion per 5-minute tick.
   3. a dead tunnel: BOTH inside-ns egress and via-proxy egress fail
      while the default namespace still reaches the internet.
+Gateway mode (GATEWAY_MODE): the gateway can run on the host's own IP
+("direct", default egress) with FreeHop as a fallback, or permanently
+behind the FreeHop proxy ("proxy", the original behaviour). In direct
+mode a confirmed 429 switches the gateway to the proxy (restore the
+proxy drop-in, restart the gateway, no rotate spent: the current exit
+is healthy, only the local IP is limited); in proxy mode the watcher
+tries returning to direct every RETURN_CHECK_MINS once the gateway is
+healthy, so the gateway does not stay on the proxy forever. Both
+switches are bounded: a return is attempted at most once per
+RETURN_CHECK_MINS, and a switch that fails restores the previous mode.
+The current mode lives in watch-state.json (gateway_mode) so a restart
+does not forget it. The FreeHop tunnel stays up in both modes: in
+direct mode it is the fallback, so doctor still checks it.
 A probe 200 short-circuits the run (healthy, skip the tunnel check).
 Limits: min interval, max per hour, max per day, stop after N consecutive
 failed runs. After a rotate, runs POST_ROTATE_HOOK (e.g. restart your
@@ -64,6 +77,10 @@ PROBE_CMD = CFG("PROBE_CMD", "")
 PROBE_CONFIRM_SECS = int(CFG("PROBE_CONFIRM_SECS", "120") or 120)
 POST_ROTATE_HOOK = CFG("POST_ROTATE_HOOK", "")
 TEST_CMD = CFG("TEST_CMD", "")
+GATEWAY_MODE = CFG("GATEWAY_MODE", "proxy")
+GATEWAY_SERVICE = CFG("GATEWAY_SERVICE", "9router.service")
+GATEWAY_DROPIN = CFG("GATEWAY_DROPIN", "~/.config/systemd/user/9router.service.d/freehop-proxy.conf")
+RETURN_CHECK_MINS = int(CFG("RETURN_CHECK_MINS", "30") or 30)
 LAST_PROBE_STATUS = 0
 MIN_INTERVAL_MIN = int(CFG("MIN_INTERVAL_MIN", "10") or 10)
 MAX_PER_HOUR = int(CFG("MAX_PER_HOUR", "6") or 6)
@@ -84,9 +101,22 @@ def log(msg):
 
 def load_state():
     try:
-        return json.load(open(STATE))
+        st = json.load(open(STATE))
     except Exception:
-        return {"last_rotate": 0, "hour_count": 0, "hour_start": 0, "day_count": 0, "day_start": "", "consec_fail": 0}
+        st = {"last_rotate": 0, "hour_count": 0, "hour_start": 0, "day_count": 0, "day_start": "", "consec_fail": 0}
+    # Persist the mode keys on first sight: a healthy tick returns
+    # early without saving, so without this the file would never
+    # record the mode and doctor/status would disagree about it.
+    fresh = "gateway_mode" not in st
+    st.setdefault("gateway_mode", GATEWAY_MODE if GATEWAY_MODE in ("direct", "proxy") else "proxy")
+    st.setdefault("mode_since", 0)
+    st.setdefault("last_return_attempt", 0)
+    if fresh:
+        try:
+            save_state(st)
+        except Exception:
+            pass
+    return st
 
 def save_state(s):
     os.makedirs(STATE_DIR, exist_ok=True)
@@ -240,6 +270,105 @@ def ensure_agent_alive():
     except Exception as e:
         log(f"agent restart failed: {e}")
 
+def wait_gateway_200(tries=4, delay=12):
+    """Probe until the gateway answers 200 (a restarted gateway needs
+    9-37s before it listens again). Returns True on the first 200.
+    Without a PROBE_CMD, fall back to TEST_CMD (exit 0 means up);
+    with neither, wait 45s and assume up, there is nothing to check."""
+    if not PROBE_CMD:
+        if TEST_CMD:
+            rc, _, _ = run_shell(TEST_CMD, timeout=120)
+            return rc == 0
+        time.sleep(45)
+        return True
+    for t in range(1, tries + 1):
+        if probe_gateway() == 200:
+            return True
+        log(f"gateway not 200 yet (try {t}/{tries})")
+        if t < tries:
+            time.sleep(delay)
+    return False
+
+def set_dropin(enabled):
+    """Enable (restore) or disable (move aside) the proxy drop-in for
+    the gateway service. Returns True if the drop-in ends up in the
+    requested state. The disabled copy keeps its name so a failed
+    switch can be undone by moving it back."""
+    dropin = os.path.expanduser(GATEWAY_DROPIN)
+    disabled = dropin + ".disabled-direct"
+    try:
+        if enabled:
+            if os.path.exists(dropin):
+                return True
+            if not os.path.exists(disabled):
+                log(f"cannot switch to proxy: no drop-in at {dropin} or {disabled}")
+                return False
+            os.rename(disabled, dropin)
+        else:
+            if not os.path.exists(dropin):
+                return True
+            os.rename(dropin, disabled)
+        return True
+    except Exception as e:
+        log(f"drop-in move failed: {e}")
+        return False
+
+def restart_gateway():
+    rc, _, err = run_shell("systemctl --user daemon-reload && systemctl --user restart " + GATEWAY_SERVICE, timeout=60)
+    if rc != 0:
+        log(f"gateway restart rc={rc} err={err[-200:]}")
+        return False
+    return True
+
+def switch_to_proxy(st):
+    """Direct -> proxy: gateway egress moves behind the FreeHop proxy.
+    No rotate is spent: the current exit is healthy, only the local IP
+    hit the limit. On failure the drop-in is left as it was and False
+    is returned so the caller can fall back to a rotate."""
+    log("direct egress limited, switching gateway to FreeHop proxy")
+    if not set_dropin(True):
+        return False
+    if not restart_gateway():
+        return False
+    time.sleep(8)
+    if wait_gateway_200():
+        st["gateway_mode"] = "proxy"; st["mode_since"] = int(time.time())
+        save_state(st)
+        log("gateway now on FreeHop proxy, probe 200")
+        return True
+    log("gateway still not 200 behind proxy, switch failed")
+    return False
+
+def switch_to_direct(st):
+    """Proxy -> direct: gateway egress returns to the host IP. On
+    failure (direct still 429) the proxy drop-in is restored and the
+    gateway restarted back behind the proxy, so the attempt costs at
+    most two restarts and never strands the gateway on a dead path."""
+    log("trying return to direct egress")
+    st["last_return_attempt"] = int(time.time())
+    if not set_dropin(False):
+        save_state(st)
+        return False
+    if not restart_gateway():
+        set_dropin(True)
+        restart_gateway()
+        save_state(st)
+        return False
+    time.sleep(8)
+    if wait_gateway_200():
+        st["gateway_mode"] = "direct"; st["mode_since"] = int(time.time())
+        save_state(st)
+        log("gateway back on direct egress, probe 200")
+        return True
+    log("direct still limited, restoring proxy")
+    set_dropin(True)
+    restart_gateway()
+    time.sleep(8)
+    wait_gateway_200()
+    st["gateway_mode"] = "proxy"; st["mode_since"] = int(time.time())
+    save_state(st)
+    return False
+
 def acquire_lock():
     """Non-blocking lock so two watch runs never overlap (a run with a
     429 confirm + rotate + retried test can outlast the 5-minute timer).
@@ -267,14 +396,21 @@ def main():
     if now - st.get("hour_start", 0) >= 3600:
         st["hour_count"] = 0; st["hour_start"] = now
     ensure_agent_alive()
+    mode = st.get("gateway_mode", "proxy")
     if not force:
         reason = None
+        limit_reason = False
         if has_limit_recent():
             reason = f"limit pattern {WATCH_PATTERN!r} detected in {WATCH_UNIT} journal"
+            limit_reason = True
         elif PROBE_CMD:
             if gateway_limit_confirmed():
                 reason = "gateway limit confirmed by endpoint probe (429 twice)"
+                limit_reason = True
             elif LAST_PROBE_STATUS == 200:
+                if mode == "proxy" and int(time.time()) - st.get("last_return_attempt", 0) >= RETURN_CHECK_MINS * 60 and int(time.time()) - st.get("mode_since", 0) >= RETURN_CHECK_MINS * 60:
+                    switch_to_direct(st)
+                    mode = st.get("gateway_mode", "proxy")
                 log("gateway probe 200, healthy, no rotate")
                 return 0
         if reason is None and tunnel_dead():
@@ -282,6 +418,10 @@ def main():
         if reason is None:
             log(f"no {WATCH_PATTERN} in last {WATCH_SINCE}, no gateway limit on probe, tunnel OK, no rotate")
             return 0
+        if mode == "direct" and limit_reason:
+            if switch_to_proxy(st):
+                return 0
+            log("switch to proxy failed, falling back to rotate")
         log(f"{reason}, rotating")
     else:
         log("forced rotate")
