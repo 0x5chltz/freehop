@@ -1,18 +1,32 @@
 #!/usr/bin/env python3
 """Watch for a free-tier limit and auto-rotate the Proton exit server.
-Triggers (either one rotates):
+Triggers (any one rotates):
   1. WATCH_PATTERN in WATCH_UNIT's journal in the last WATCH_SINCE
      (e.g. FreeUsageLimitError from your AI gateway), or
-  2. a dead tunnel: BOTH inside-ns egress and via-proxy egress fail
+  2. the endpoint probe (PROBE_CMD, a command that prints the gateway's
+     HTTP status): a 429 confirmed by a second 429 PROBE_CONFIRM_SECS
+     later. A single 429 never rotates: the free limit flaps (200, then
+     429, then 200 again within minutes), so the confirm step is the
+     debounce. Any other status (200, 502, 503, 000) never rotates on
+     its own. This is the primary 429 signal: neither the gateway nor
+     the 9Router journal ever logs the 429 (verified 2026-11-23: zero
+     FreeUsageLimitError/429/rate-limit lines in 3h of both journals,
+     empty mitm log dir), the 429 only exists in the HTTP response to
+     the caller, so journal grep alone is blind. The probe costs one
+     tiny completion per 5-minute tick.
+  3. a dead tunnel: BOTH inside-ns egress and via-proxy egress fail
      while the default namespace still reaches the internet.
+A probe 200 short-circuits the run (healthy, skip the tunnel check).
 Limits: min interval, max per hour, max per day, stop after N consecutive
 failed runs. After a rotate, runs POST_ROTATE_HOOK (e.g. restart your
-gateway so it drops its cached session), then runs TEST_CMD if set:
-exit 0 means the gateway works again.
+gateway so it drops its cached session), then runs TEST_CMD if set,
+retried for up to ~45s because a restarted gateway needs 9-37s before
+it listens again; exit 0 means the gateway works again. Overlapping
+runs are prevented with a lock file.
 All settings come from the FreeHop config file ($FREEHOP_CONFIG or
 ~/.config/freehop/config). Log: <STATE_DIR>/watch.log
 """
-import datetime, json, os, subprocess, sys, time
+import datetime, json, os, re, subprocess, sys, time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -46,8 +60,11 @@ ROTATE_PY = os.path.join(_HERE, "freehop-rotate.py")
 WATCH_UNIT = CFG("WATCH_UNIT", "")
 WATCH_PATTERN = CFG("WATCH_PATTERN", "FreeUsageLimitError")
 WATCH_SINCE = CFG("WATCH_SINCE", "10 minutes ago")
+PROBE_CMD = CFG("PROBE_CMD", "")
+PROBE_CONFIRM_SECS = int(CFG("PROBE_CONFIRM_SECS", "120") or 120)
 POST_ROTATE_HOOK = CFG("POST_ROTATE_HOOK", "")
 TEST_CMD = CFG("TEST_CMD", "")
+LAST_PROBE_STATUS = 0
 MIN_INTERVAL_MIN = int(CFG("MIN_INTERVAL_MIN", "10") or 10)
 MAX_PER_HOUR = int(CFG("MAX_PER_HOUR", "6") or 6)
 MAX_PER_DAY = int(CFG("MAX_PER_DAY", "20") or 20)
@@ -101,6 +118,50 @@ def probe(cmd, timeout=15):
     except Exception:
         return False
 
+def probe_gateway():
+    """Run PROBE_CMD, return the gateway HTTP status as an int (200, 429,
+    502, ...). 0 means the probe itself failed (no output, unparseable,
+    timeout): inconclusive, never a limit signal. Records the result in
+    LAST_PROBE_STATUS so main() can short-circuit on a healthy 200."""
+    global LAST_PROBE_STATUS
+    LAST_PROBE_STATUS = 0
+    try:
+        rc, out, err = run_shell(PROBE_CMD, timeout=60)
+        m = re.search(r"\b(\d{3})\b", out.strip())
+        if m:
+            LAST_PROBE_STATUS = int(m.group(1))
+        else:
+            log(f"probe output unparseable: {out[-100:]!r} err={err[-100:]!r}")
+    except Exception as e:
+        log(f"probe error: {e}")
+    return LAST_PROBE_STATUS
+
+def gateway_limit_confirmed():
+    """True only if the endpoint probe answers 429 twice, the second
+    PROBE_CONFIRM_SECS after the first. A single 429 is a flap, not a
+    limit: observed 200 -> 429 -> 200 within 6 minutes on one exit.
+    200 on the confirm means recovered; anything else (502/503/000)
+    means inconclusive, never a rotate."""
+    if not PROBE_CMD:
+        return False
+    first = probe_gateway()
+    if first == 200:
+        return False
+    if first != 429:
+        log(f"gateway probe returned {first}, not a limit signal, no rotate")
+        return False
+    log(f"gateway probe 429 (1/2), confirming in {PROBE_CONFIRM_SECS}s")
+    time.sleep(PROBE_CONFIRM_SECS)
+    second = probe_gateway()
+    if second == 200:
+        log("gateway probe recovered to 200 on confirm, flapping, no rotate")
+        return False
+    if second == 429:
+        log("gateway probe 429 again (2/2), limit confirmed")
+        return True
+    log(f"gateway probe confirm returned {second}, inconclusive, no rotate")
+    return False
+
 def inside_ok():
     # The "inside" path depends on the method. Proton and proxy-pool have
     # a direct route out of the ns (wg, or veth default). Tor has neither:
@@ -136,8 +197,25 @@ def tunnel_dead():
     log("tunnel dead (inside-ns and proxy egress both fail, default ns OK)")
     return True
 
+def acquire_lock():
+    """Non-blocking lock so two watch runs never overlap (a run with a
+    429 confirm + rotate + retried test can outlast the 5-minute timer).
+    Returns the open lock file to hold, or None if another run is active."""
+    import fcntl
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        f = open(os.path.join(STATE_DIR, "watch.lock"), "w")
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return f
+    except Exception:
+        return None
+
 def main():
     force = "--force" in sys.argv
+    lock = acquire_lock()
+    if lock is None:
+        log("another watch run is active, skip")
+        return 0
     st = load_state()
     now = int(time.time())
     today = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -146,13 +224,21 @@ def main():
     if now - st.get("hour_start", 0) >= 3600:
         st["hour_count"] = 0; st["hour_start"] = now
     if not force:
+        reason = None
         if has_limit_recent():
-            log(f"limit pattern {WATCH_PATTERN!r} detected in {WATCH_UNIT} journal")
-        elif tunnel_dead():
-            log("tunnel dead, rotating")
-        else:
-            log(f"no {WATCH_PATTERN} in last {WATCH_SINCE} and tunnel OK, no rotate")
+            reason = f"limit pattern {WATCH_PATTERN!r} detected in {WATCH_UNIT} journal"
+        elif PROBE_CMD:
+            if gateway_limit_confirmed():
+                reason = "gateway limit confirmed by endpoint probe (429 twice)"
+            elif LAST_PROBE_STATUS == 200:
+                log("gateway probe 200, healthy, no rotate")
+                return 0
+        if reason is None and tunnel_dead():
+            reason = "tunnel dead"
+        if reason is None:
+            log(f"no {WATCH_PATTERN} in last {WATCH_SINCE}, no gateway limit on probe, tunnel OK, no rotate")
             return 0
+        log(f"{reason}, rotating")
     else:
         log("forced rotate")
     if now - st.get("last_rotate", 0) < MIN_INTERVAL_MIN * 60 and not force:
@@ -179,9 +265,17 @@ def main():
             log(f"post-rotate hook rc={rc2}")
         time.sleep(8)
         if TEST_CMD:
-            rc3, out3, _ = run_shell(TEST_CMD, timeout=120)
-            log(f"test after rotate: rc={rc3} out={out3[-200:]}")
-            ok = rc3 == 0
+            # A restarted gateway needs 9-37s before it listens again, so
+            # one immediate test can fail on connection refused even when
+            # the rotate worked. Retry for ~45s before declaring failure.
+            ok = False
+            for t in range(1, 5):
+                rc3, out3, _ = run_shell(TEST_CMD, timeout=120)
+                log(f"test after rotate (try {t}/4): rc={rc3} out={out3[-200:]}")
+                if rc3 == 0:
+                    ok = True
+                    break
+                time.sleep(12)
         else:
             ok = True
         if ok:

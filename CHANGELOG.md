@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0 (2026-11-23)
+
+- Watcher now detects the 429 by a direct endpoint probe: `PROBE_CMD` (a command that prints the gateway HTTP status) is the primary 429 signal, because the gateway's journal never logs the 429 -- the 429 only exists in the HTTP response to the caller, so journal grep alone was blind. Proven live 23 Nov: the watcher saw 429 twice, rotated to US-FREE#106, and the gateway was back to HTTP 200. A single 429 never rotates; the probe must answer 429 twice, `PROBE_CONFIRM_SECS=120` seconds apart, so a short 429 flap is ignored. Other statuses (200/502/503/000) never rotate on their own. `examples/test-9router.py` gains `--probe` mode (prints only the status code, always exits 0). `freehop doctor` gains a probe-command check (17 to 18 checks). Post-rotate `TEST_CMD` is retried up to 4x, 12s apart, because the gateway needs 9-37s to listen after a restart. Cost: one tiny completion per 5-minute tick.
+- Fix: config values with spaces must be quoted -- `WATCH_SINCE=10 minutes ago` (and any multi-word `POST_ROTATE_HOOK` / `TEST_CMD`) without quotes broke bash sourcing of the config (`config: line 21: minutes: command not found`). The shipped `freehop.conf.example` carried the same bug and is fixed here, with a note in the file.
+- Fix: the agent runs under sudo (HOME=/root) inside the namespace, but the keyring and cert live under the invoking user's home, so `freehop-rotate.py` now runs the agent as `sudo -n env HOME=<user home> ip netns exec ...` (sudo strips env set before it).
+
 ## v0.4.0 (2026-11-22)
 
 - Egress methods: `EGRESS_METHOD` in the config picks the exit. `proton` (default) keeps the WireGuard flow. `tor` sends `SIGNAL NEWNYM` to the Tor control port and verifies the exit IP changed (up to 3 attempts); the proxy chains through Tor's SOCKS port, managed by `freehop-tor.service`. `proxy-pool` round-robins over `PROXY_POOL` (your own `http://` or `socks5://` upstreams); a dead entry fails the rotate and is skipped next time because the pointer already advanced. The proxy reads `$STATE_DIR/upstream.json` on every connection, so a rotate takes effect without a restart.

@@ -59,6 +59,11 @@ TOR_CONTROL = CFG("TOR_CONTROL", "127.0.0.1:9051")
 PROXY_POOL = CFG("PROXY_POOL", "")
 EXIT_IP_URL = CFG("EXIT_IP_URL", "https://api.ipify.org")
 AGENT_PY = os.path.join(_HERE, "freehop-agent.py")
+# The agent runs under sudo (HOME=/root) inside the netns, but the
+# keyring and cert live under the invoking user home. Pass HOME
+# explicitly after sudo (sudo strips env set before it) so the
+# agent home paths resolve to the right home.
+HOME_DIR = os.path.expanduser("~")
 AGENT_LOG = os.path.join(STATE_DIR, "agent.log")
 
 def run(cmd, check=True, timeout=60):
@@ -157,7 +162,7 @@ def start_agent(domain, attempts=3):
     for attempt in range(1, attempts + 1):
         run("sudo -n pkill -f freehop-agent.py || true", check=False)
         time.sleep(2)
-        run(f"sudo -n ip netns exec {NETNS} nohup python3 {AGENT_PY} {domain} > {AGENT_LOG} 2>&1 &")
+        run(f"sudo -n env HOME={HOME_DIR} ip netns exec {NETNS} nohup python3 {AGENT_PY} {domain} > {AGENT_LOG} 2>&1 &")
         for i in range(12):
             time.sleep(2)
             try:

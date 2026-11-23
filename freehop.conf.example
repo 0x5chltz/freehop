@@ -57,7 +57,8 @@ KEYRING_GLOB=~/.config/Proton/keyring-proton-sso-account-*.json
 # health check.
 WATCH_UNIT=
 WATCH_PATTERN=FreeUsageLimitError
-WATCH_SINCE=10 minutes ago
+# Multi-word values must be quoted: this file is sourced by bash.
+WATCH_SINCE="10 minutes ago"
 
 # Command run after a successful rotate (e.g. restart your gateway so it
 # drops its cached session). Leave empty for none.
@@ -68,6 +69,20 @@ POST_ROTATE_HOOK=
 # Example for a 9Router gateway (reads its key from its own DB, key never printed):
 # TEST_CMD=python3 ~/.local/share/freehop/examples/test-9router.py
 TEST_CMD=
+
+# Endpoint probe: command that prints the gateway's HTTP status code
+# (200, 429, ...) and nothing else. The watcher runs it every tick; it
+# is the primary 429 signal, because the gateway's journal never logs
+# the 429 (the 429 only exists in the HTTP response to the caller).
+# A 429 is only acted on after a second 429 PROBE_CONFIRM_SECS later,
+# so a short 429 flap never rotates. Any other status never rotates.
+# Leave empty to keep journal-only detection (blind on gateways that
+# do not log the 429). Costs one tiny completion per 5-minute tick.
+# Example for a 9Router gateway (same key handling as TEST_CMD):
+# PROBE_CMD="python3 ~/.local/share/freehop/examples/test-9router.py --probe"
+PROBE_CMD=
+# Seconds between the first 429 probe and the confirming probe.
+PROBE_CONFIRM_SECS=120
 
 # Rotate limits (same shape as the production setup that ran this nightly)
 MIN_INTERVAL_MIN=10

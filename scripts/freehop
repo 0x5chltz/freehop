@@ -10,7 +10,7 @@ PREFIX="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${FREEHOP_CONFIG:-$HOME/.config/freehop/config}"
 NETNS="freehop"; NS_IP="10.200.0.2"; PROXY_PORT="18080"; STATE_DIR="$HOME/.local/share/freehop"
 WG_IF="freehop0"; KEYRING_GLOB="$HOME/.config/Proton/keyring-proton-sso-account-*.json"
-WATCH_UNIT=""; TEST_CMD=""; EGRESS_METHOD="proton"; TOR_CONTROL="127.0.0.1:9051"; TOR_SOCKS_PORT="9050"; HOST_IP="10.200.0.1"; PROXY_POOL=""
+WATCH_UNIT=""; TEST_CMD=""; PROBE_CMD=""; EGRESS_METHOD="proton"; TOR_CONTROL="127.0.0.1:9051"; TOR_SOCKS_PORT="9050"; HOST_IP="10.200.0.1"; PROXY_POOL=""
 if [ -f "$CONFIG" ]; then set -a; . "$CONFIG"; set +a; fi
 
 # JSON-escape one value (prints it quoted).
@@ -124,6 +124,7 @@ cmd_doctor() {
       ;;
   esac
   if [ -n "$TEST_CMD" ]; then check "test command" "$TEST_CMD" "check TEST_CMD in $CONFIG"; fi
+  if [ -n "$PROBE_CMD" ]; then check "probe command" "$PROBE_CMD 2>/dev/null | grep -qxE '[0-9]{3}'" "check PROBE_CMD in $CONFIG (must print the gateway HTTP status)"; fi
   local ok=0 fail=0
   local r name isok hint
   if [ "$json" -eq 1 ]; then

@@ -5,7 +5,7 @@ description: Keep a 9Router gateway serving the OpenCode provider's combos model
 
 # FreeHop
 
-FreeHop keeps a free-tier AI gateway answering by rotating exits. It is built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`). A scoped network namespace holds a forward proxy that routes only the gateway's traffic through the current exit, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. Server-side, Linux only, no GUI. The exit comes from one of three methods, `EGRESS_METHOD` in the config: `proton` (WireGuard to a Proton Free server, default), `tor` (NEWNYM on the Tor control port, the proxy chains through Tor's SOCKS port), or `proxy-pool` (round-robin over your own `http://` or `socks5://` upstreams).
+FreeHop keeps a free-tier AI gateway answering by rotating exits. It is built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`). A scoped network namespace holds a forward proxy that routes only the gateway's traffic through the current exit, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. The 429 is detected by a direct endpoint probe (the gateway's HTTP status, 429 twice in a row) because neither journal logs it; journal grep alone is blind. Server-side, Linux only, no GUI. The exit comes from one of three methods, `EGRESS_METHOD` in the config: `proton` (WireGuard to a Proton Free server, default), `tor` (NEWNYM on the Tor control port, the proxy chains through Tor's SOCKS port), or `proxy-pool` (round-robin over your own `http://` or `socks5://` upstreams).
 
 ## When to use it
 
@@ -49,6 +49,8 @@ The installer checks tools, the prerequisites for the configured `EGRESS_METHOD`
 | `EXIT_IP_URL` | `https://api.ipify.org` | URL returning the caller's IP as plain text, used to verify a rotate |
 | `WATCH_UNIT` | (empty) | systemd unit whose journal is watched for the limit pattern |
 | `WATCH_PATTERN` | `FreeUsageLimitError` | journal text that means "free limit hit" |
+| `PROBE_CMD` | (empty) | command that prints the gateway HTTP status (200, 429, ...); the primary 429 signal |
+| `PROBE_CONFIRM_SECS` | `120` | seconds between the first 429 probe and the confirming probe |
 | `POST_ROTATE_HOOK` | (empty) | command after a rotate, e.g. `systemctl --user restart 9router.service` |
 | `TEST_CMD` | (empty) | command whose exit 0 means the gateway works again |
 | `MIN_INTERVAL_MIN` / `MAX_PER_HOUR` / `MAX_PER_DAY` | 10 / 6 / 20 | rotate budget |
@@ -58,7 +60,8 @@ Example for a 9Router gateway:
 ```ini
 WATCH_UNIT=hermes-gateway.service
 WATCH_PATTERN=FreeUsageLimitError
-POST_ROTATE_HOOK=systemctl --user restart 9router.service
+PROBE_CMD="python3 ~/.local/share/freehop/examples/test-9router.py --probe"
+POST_ROTATE_HOOK="systemctl --user restart 9router.service"
 TEST_CMD=python3 ~/.local/share/freehop/examples/test-9router.py
 ```
 

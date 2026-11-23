@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.4.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.5.0-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -23,7 +23,7 @@ your gateway ──HTTP_PROXY──> [forward proxy 10.200.0.2:18080]
 ```
 
 - **Scoped tunnel.** The WireGuard interface lives in a network namespace with its own veth pair and NAT. Only traffic pointed at the proxy uses the VPN. The host keeps its normal connection, SSH stays put.
-- **Rotate on limit.** Every 5 minutes the watcher checks two things: the gateway's journal for the limit pattern (for example `FreeUsageLimitError`), and tunnel health (inside-ns egress and proxy egress, with a retest). Either one triggers a rotate, whose meaning depends on the egress method (below): a fresh Proton server, a new Tor circuit, or the next pool proxy.
+- **Rotate on limit.** Every 5 minutes the watcher checks three things: the gateway's journal for the limit pattern (for example `FreeUsageLimitError`), a direct endpoint probe that prints the gateway's HTTP status, and tunnel health (inside-ns egress and proxy egress, with a retest). Any one triggers a rotate, whose meaning depends on the egress method (below): a fresh Proton server, a new Tor circuit, or the next pool proxy. The probe is the primary 429 signal: the 429 only exists in the HTTP response to the caller, neither journal logs it, so journal grep alone is blind. A single 429 never rotates; the probe must answer 429 twice, 120 seconds apart, so a short flap is ignored.
 - **Rotate limits.** At most one rotate per 10 minutes, 6 per hour, 20 per day, and it stops after 3 consecutive failed runs. A free exit usually burns in under an hour under gateway load, so the budget matters.
 - **After a rotate.** An optional hook runs (for example, restart your gateway so it drops its cached session), then an optional test command decides whether the gateway is back to 200.
 - **Survives reboots.** A boot unit rebuilds the namespace and picks a fresh exit. The old hand-built setup had no persistence; this one does.
@@ -99,6 +99,8 @@ Edit `~/.config/freehop/config`. The important knobs:
 | `EXIT_IP_URL` | `https://api.ipify.org` | URL that returns the caller's IP as plain text, used to verify a rotate |
 | `WATCH_UNIT` | (empty) | systemd unit whose journal is watched for the limit pattern |
 | `WATCH_PATTERN` | `FreeUsageLimitError` | the journal text that means "free limit hit" |
+| `PROBE_CMD` | (empty) | command that prints the gateway HTTP status (200, 429, ...); the primary 429 signal |
+| `PROBE_CONFIRM_SECS` | `120` | seconds between the first 429 probe and the confirming probe |
 | `POST_ROTATE_HOOK` | (empty) | command after a rotate, e.g. `systemctl --user restart 9router.service` |
 | `TEST_CMD` | (empty) | command whose exit 0 means the gateway works again |
 | `MIN_INTERVAL_MIN` / `MAX_PER_HOUR` / `MAX_PER_DAY` | 10 / 6 / 20 | rotate budget |
