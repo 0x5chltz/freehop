@@ -27,7 +27,7 @@ gather_status() {
   if ns_exists; then NS_STATE="present"; else NS_STATE="missing"; fi
   # wg indents the peer lines, so no ^ anchor on endpoint:
   WG_ENDPOINT="$(sudo -n ip netns exec "$NETNS" wg show "$WG_IF" 2>/dev/null | grep -m1 'endpoint:' | awk '{print $2}' || true)"
-  if [ "$EGRESS_METHOD" = "proton" ]; then
+  if [ "$EGRESS_METHOD" = "proton" ] || [ "$EGRESS_METHOD" = "warp" ]; then
     if sudo -n ip netns exec "$NETNS" wg show "$WG_IF" 2>/dev/null | grep -q 'latest handshake'; then
       WG_HANDSHAKE="recent"
     else
@@ -38,13 +38,28 @@ gather_status() {
   fi
   # Exit IP through the proxy: the same for every method, and the only
   # path that works for tor (no direct egress inside the ns).
-  EXIT_IP="$(curl -s --max-time 10 --noproxy '' -x "http://$NS_IP:$PROXY_PORT" https://api.ipify.org 2>/dev/null || true)"
+  # One retry each: a cold TLS handshake through the tunnel can exceed
+  # one attempt's timeout while the tunnel itself is fine (status showed
+  # 000/empty while doctor passed right after).
+  EXIT_IP=""
+  for _try in 1 2; do
+    EXIT_IP="$(curl -s --max-time 10 --noproxy '' -x "http://$NS_IP:$PROXY_PORT" https://api.ipify.org 2>/dev/null || true)"
+    [ -n "$EXIT_IP" ] && break
+    sleep 2
+  done
   UPSTREAM="direct"
   if [ -f "$STATE_DIR/upstream.json" ]; then
     UPSTREAM="$(python3 -c "import json; d=json.load(open('$STATE_DIR/upstream.json')); print(d.get('type','direct')+':'+d.get('host','')+':'+str(d.get('port','')))" 2>/dev/null || echo "?")"
   fi
   # curl prints 000 itself on failure, so do not add another one with ||.
-  PROXY_CODE="$(curl -s -m 5 --noproxy '' -x "http://$NS_IP:$PROXY_PORT" -o /dev/null -w "%{http_code}" https://www.google.com/ 2>/dev/null || true)"
+  # Timeout 10 like doctor (was 5: a cold handshake can exceed 5s),
+  # one retry on 000 so a single slow request does not report a dead proxy.
+  PROXY_CODE=""
+  for _try in 1 2; do
+    PROXY_CODE="$(curl -s -m 10 --noproxy '' -x "http://$NS_IP:$PROXY_PORT" -o /dev/null -w "%{http_code}" https://www.google.com/ 2>/dev/null || true)"
+    [ -n "$PROXY_CODE" ] && [ "$PROXY_CODE" != "000" ] && break
+    sleep 2
+  done
   [ -z "$PROXY_CODE" ] && PROXY_CODE="000"
   UNIT_PROXY="$(unit_state freehop-proxy.service)"
   UNIT_TIMER="$(unit_state freehop-watch.timer)"
@@ -53,6 +68,17 @@ gather_status() {
     LAST_SERVER="$(python3 -c "import json; print(json.load(open('$STATE_DIR/rotate-state.json')).get('server',''))" 2>/dev/null || true)"
     LAST_EXIT="$(python3 -c "import json; print(json.load(open('$STATE_DIR/rotate-state.json')).get('exit_ip',''))" 2>/dev/null || true)"
     LAST_METHOD="$(python3 -c "import json; print(json.load(open('$STATE_DIR/rotate-state.json')).get('method','$EGRESS_METHOD'))" 2>/dev/null || echo "$EGRESS_METHOD")"
+  fi
+  # Fallback: if the live exit-IP check stalled (the whole proxy path can
+  # stall >10s on a cold Proton exit, both retries included), report the
+  # last known exit from rotate-state.json and say so, instead of an
+  # empty exit_ip. exit_ip_source is "live" when the live check answered,
+  # "cached" when the fallback was used, and "live" with an empty exit_ip
+  # when nothing is known at all (no rotate yet).
+  EXIT_IP_SOURCE="live"
+  if [ -z "$EXIT_IP" ] && [ -n "$LAST_EXIT" ]; then
+    EXIT_IP="$LAST_EXIT"
+    EXIT_IP_SOURCE="cached"
   fi
   # Gateway mode (direct = host IP, proxy = FreeHop) is recorded by the
   # watcher in watch-state.json; fall back to the configured mode.
@@ -67,8 +93,8 @@ cmd_status() {
   [ "${1:-}" = "--json" ] && json=1
   gather_status
   if [ "$json" -eq 1 ]; then
-    printf '{"egress_method": %s, "gateway_mode": %s, "netns": %s, "wg_interface": %s, "wg_endpoint": %s, "wg_handshake": %s, "exit_ip": %s, "upstream": %s, "proxy": {"url": %s, "http_code": %s}, "units": {"proxy": %s, "watch_timer": %s}, "last_rotate": {"server": %s, "exit_ip": %s, "method": %s}}\n' \
-      "$(esc "$EGRESS_METHOD")" "$(esc "$GATEWAY_MODE_STATE")" "$(esc "$NS_STATE")" "$(esc "$WG_IF")" "$(esc "$WG_ENDPOINT")" "$(esc "$WG_HANDSHAKE")" "$(esc "$EXIT_IP")" "$(esc "$UPSTREAM")" \
+    printf '{"egress_method": %s, "gateway_mode": %s, "netns": %s, "wg_interface": %s, "wg_endpoint": %s, "wg_handshake": %s, "exit_ip": %s, "exit_ip_source": %s, "upstream": %s, "proxy": {"url": %s, "http_code": %s}, "units": {"proxy": %s, "watch_timer": %s}, "last_rotate": {"server": %s, "exit_ip": %s, "method": %s}}\n' \
+      "$(esc "$EGRESS_METHOD")" "$(esc "$GATEWAY_MODE_STATE")" "$(esc "$NS_STATE")" "$(esc "$WG_IF")" "$(esc "$WG_ENDPOINT")" "$(esc "$WG_HANDSHAKE")" "$(esc "$EXIT_IP")" "$(esc "$EXIT_IP_SOURCE")" "$(esc "$UPSTREAM")" \
       "$(esc "http://$NS_IP:$PROXY_PORT")" "$(esc "$PROXY_CODE")" \
       "$(esc "$UNIT_PROXY")" "$(esc "$UNIT_TIMER")" \
       "$(esc "$LAST_SERVER")" "$(esc "$LAST_EXIT")" "$(esc "$LAST_METHOD")"
@@ -77,6 +103,9 @@ cmd_status() {
   echo "== FreeHop status =="
   echo "egress method: $EGRESS_METHOD (upstream: $UPSTREAM)"
   echo "gateway mode: $GATEWAY_MODE_STATE"
+  if [ -n "$EXIT_IP" ]; then
+    if [ "$EXIT_IP_SOURCE" = "cached" ]; then echo "exit IP: $EXIT_IP (cached, live check stalled)"; else echo "exit IP: $EXIT_IP"; fi
+  fi
   "$PREFIX/scripts/freehop-netns.sh" status
   echo -n "proxy $NS_IP:$PROXY_PORT: "
   if [ "$PROXY_CODE" = "200" ]; then echo "200 OK"; else echo "unreachable"; fi
@@ -140,8 +169,17 @@ cmd_doctor() {
       check "proxy pool set" "test -n \"$PROXY_POOL\"" "set PROXY_POOL in $CONFIG (comma-separated http:// or socks5:// URLs)"
       check "inside-ns egress" "sudo -n ip netns exec $NETNS curl -s -m 10 -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200" "netns has no route to the pool, run: freehop setup"
       ;;
+    warp)
+      check "wg" "command -v wg" "install wireguard"
+      check "wgcf" "command -v wgcf || test -x $STATE_DIR/bin/wgcf" "wgcf missing (downloaded automatically on first warp rotate; check network to github.com)"
+      check "warp profile present" "test -f $STATE_DIR/warp/profile.conf" "run: freehop rotate"
+      check "wg interface up" "sudo -n ip netns exec $NETNS ip link show $WG_IF 2>/dev/null | grep -q UP" "run: freehop setup"
+      check "wg handshake recent" "sudo -n ip netns exec $NETNS wg show $WG_IF 2>/dev/null | grep -q 'latest handshake'" "run: freehop rotate"
+      check "inside-ns egress" "sudo -n ip netns exec $NETNS curl -s -m 10 -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200" "tunnel dead, run: freehop rotate"
+      check "warp exit IPv6" "sudo -n ip netns exec $NETNS curl -s -m 10 https://api64.ipify.org/ 2>/dev/null | grep -q :" "no IPv6 exit (the fresh /64 cannot help), run: freehop rotate"
+      ;;
     *)
-      check "egress method" "false" "unknown EGRESS_METHOD: $EGRESS_METHOD (want proton, tor, or proxy-pool)"
+      check "egress method" "false" "unknown EGRESS_METHOD: $EGRESS_METHOD (want proton, tor, proxy-pool, or warp)"
       ;;
   esac
   if [ -n "$TEST_CMD" ]; then check "test command" "$TEST_CMD" "check TEST_CMD in $CONFIG"; fi

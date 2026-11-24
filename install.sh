@@ -44,8 +44,14 @@ case "$EGRESS_METHOD" in
     grep -qE '^PROXY_POOL=.+' "$CONFIG" \
       || { echo "PROXY_POOL is empty in $CONFIG. Set it to comma-separated http:// or socks5:// URLs, then rerun." >&2; exit 1; }
     ;;
+  warp)
+    command -v wg >/dev/null 2>&1 || { echo "missing tool: wg (install wireguard)" >&2; exit 1; }
+    # wgcf is downloaded (pinned release, SHA-256 verified) by the
+    # first warp rotate; the installer only checks the network path
+    # it needs is reachable.
+    ;;
   *)
-    echo "unknown EGRESS_METHOD: $EGRESS_METHOD (want proton, tor, or proxy-pool)" >&2; exit 1 ;;
+    echo "unknown EGRESS_METHOD: $EGRESS_METHOD (want proton, tor, proxy-pool, or warp)" >&2; exit 1 ;;
 esac
 if ! sudo -n true 2>/dev/null || ! sudo -n ip netns list >/dev/null 2>&1; then
   echo "passwordless sudo for ip/wg/iptables is not set up." >&2

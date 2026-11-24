@@ -12,10 +12,22 @@
 #   Tor exits, so treat it as a fallback, not the default.
 # proxy-pool: round-robin over your own upstream proxies. The proxy
 #   chains to the current entry; rotate advances it. Needs PROXY_POOL.
-# Not implemented on purpose: WARP (tested on this VPS, both shared
-# egress IPs were already 429, see README) and IPv6 /64 rotation
-# (needs a host with an IPv6 /64; this VPS has no IPv6 at all).
+# warp: Cloudflare WARP via wgcf. Each rotate registers a FRESH
+#   anonymous WARP device (random keypair, no personal account) and
+#   swaps the netns WireGuard peer to its profile. Cloudflare gives
+#   each new device a fresh IPv6 address; the rotate verifies the exit
+#   IPv6 /64 actually changed, because that /64 is the fresh address
+#   the free limit counts (the public IPv4 egress is Cloudflare's
+#   shared pool and may already be 429). Needs wgcf, downloaded once
+#   (pinned release, SHA-256 verified) by the first warp rotate.
+#   The old warp-cli daemon is NOT used by this method.
+# Not implemented on purpose: IPv6 /64 rotation from a host /64 (this
+# VPS has no IPv6 at all; warp supplies its own /64 through the tunnel).
 EGRESS_METHOD=proton
+
+# WARP (only when EGRESS_METHOD=warp): where the rotate checks the
+# exit IPv6 (a URL that returns the caller's IPv6 as plain text).
+WARP_EXIT_IP6_URL=https://api64.ipify.org
 
 # Tor (only when EGRESS_METHOD=tor). SocksPort is bound to HOST_IP so the
 # proxy inside the netns can reach it; the control port stays on the host.

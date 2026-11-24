@@ -105,6 +105,33 @@ do_setup() {
       systemctl --user start freehop-tor.service 2>/dev/null || echo "warning: could not start freehop-tor.service (is tor installed? run install.sh)" >&2
       echo "netns $NETNS ready (veth $SUBNET, tor via $HOST_IP:$TOR_SOCKS_PORT, NAT via $DEFAULT_IF)"
       ;;
+    warp)
+      # Like proton, but the peer is a fresh WARP device (wgcf profile),
+      # not a Proton server. The interface gets a key now (from the
+      # current warp profile when one exists, else an ephemeral one);
+      # the first rotate swaps in the real profile key + peer +
+      # addresses. The v6 default route matters here: the fresh IPv6
+      # /64 is the whole point of warp, so v6 must leave via wg too.
+      if [ -f "$STATE_DIR/warp/profile.conf" ]; then
+        KEY_TMP="$(grep -i '^PrivateKey' "$STATE_DIR/warp/profile.conf" | head -1 | cut -d= -f2 | tr -d ' ')"
+        mkdir -p "$STATE_DIR/warp"
+        printf '%s\n' "$KEY_TMP" > "$STATE_DIR/warp/wg-private.key"
+        chmod 600 "$STATE_DIR/warp/wg-private.key"
+      else
+        mkdir -p "$STATE_DIR/warp"
+        wg genkey > "$STATE_DIR/warp/wg-private.key"
+        chmod 600 "$STATE_DIR/warp/wg-private.key"
+      fi
+      if ! sudo -n ip netns exec "$NETNS" ip link show "$WG_IF" >/dev/null 2>&1; then
+        sudo -n ip netns exec "$NETNS" ip link add "$WG_IF" type wireguard
+        sudo -n ip netns exec "$NETNS" wg set "$WG_IF" private-key "$STATE_DIR/warp/wg-private.key"
+        sudo -n ip netns exec "$NETNS" ip link set "$WG_IF" up
+        sudo -n ip netns exec "$NETNS" ip route add default dev "$WG_IF" 2>/dev/null || true
+        sudo -n ip netns exec "$NETNS" ip -6 route add default dev "$WG_IF" 2>/dev/null || true
+      fi
+      rm -f "$UPSTREAM_FILE"
+      echo "netns $NETNS ready (veth $SUBNET, wg $WG_IF, warp peer set by rotate, NAT via $DEFAULT_IF)"
+      ;;
     proxy-pool)
       # The proxy reaches the pool proxies over the internet, so the ns
       # needs a default route via veth. Traffic still goes through a
@@ -118,7 +145,7 @@ do_setup() {
       echo "netns $NETNS ready (veth $SUBNET, pool via $first, NAT via $DEFAULT_IF)"
       ;;
     *)
-      echo "unknown EGRESS_METHOD: $EGRESS_METHOD (want proton, tor, or proxy-pool)" >&2
+      echo "unknown EGRESS_METHOD: $EGRESS_METHOD (want proton, tor, proxy-pool, or warp)" >&2
       exit 1
       ;;
   esac
@@ -153,7 +180,7 @@ do_status() {
   echo "egress method: ${EGRESS_METHOD:-proton}"
   if [ -f "$STATE_DIR/upstream.json" ]; then echo "upstream: $(cat "$STATE_DIR/upstream.json")"; fi
   if ns_exists; then
-    if [ "${EGRESS_METHOD:-proton}" = "proton" ]; then
+    if [ "${EGRESS_METHOD:-proton}" = "proton" ] || [ "${EGRESS_METHOD:-proton}" = "warp" ]; then
       sudo -n ip netns exec "$NETNS" wg show "$WG_IF" 2>/dev/null | head -8 || echo "wg: no interface"
     fi
     echo -n "exit IP (via proxy): "

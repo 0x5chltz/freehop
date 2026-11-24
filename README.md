@@ -5,7 +5,7 @@
 # FreeHop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.6.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.7.0-blue.svg)](CHANGELOG.md)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
@@ -23,7 +23,7 @@ your gateway ──HTTP_PROXY──> [forward proxy 10.200.0.2:18080]
 ```
 
 - **Scoped tunnel.** The WireGuard interface lives in a network namespace with its own veth pair and NAT. Only traffic pointed at the proxy uses the VPN. The host keeps its normal connection, SSH stays put.
-- **Rotate on limit.** Every 5 minutes the watcher checks three things: the gateway's journal for the limit pattern (for example `FreeUsageLimitError`), a direct endpoint probe that prints the gateway's HTTP status, and tunnel health (inside-ns egress and proxy egress, with a retest). Any one triggers a rotate, whose meaning depends on the egress method (below): a fresh Proton server, a new Tor circuit, or the next pool proxy. The probe is the primary 429 signal: the 429 only exists in the HTTP response to the caller, neither journal logs it, so journal grep alone is blind. A single 429 never rotates; the probe must answer 429 twice, 120 seconds apart, so a short flap is ignored.
+- **Rotate on limit.** Every 5 minutes the watcher checks three things: the gateway's journal for the limit pattern (for example `FreeUsageLimitError`), a direct endpoint probe that prints the gateway's HTTP status, and tunnel health (inside-ns egress and proxy egress, with a retest). Any one triggers a rotate, whose meaning depends on the egress method (below): a fresh Proton server, a new Tor circuit, the next pool proxy, or a fresh WARP device. The probe is the primary 429 signal: the 429 only exists in the HTTP response to the caller, neither journal logs it, so journal grep alone is blind. A single 429 never rotates; the probe must answer 429 twice, 120 seconds apart, so a short flap is ignored.
 - **Rotate limits.** At most one rotate per 10 minutes, 6 per hour, 20 per day, and it stops after 3 consecutive failed runs. A free exit usually burns in under an hour under gateway load, so the budget matters.
 - **After a rotate.** An optional hook runs (for example, restart your gateway so it drops its cached session), then an optional test command decides whether the gateway is back to 200.
 - **Survives reboots.** A boot unit rebuilds the namespace and picks a fresh exit. The old hand-built setup had no persistence; this one does.
@@ -37,11 +37,11 @@ your gateway ──HTTP_PROXY──> [forward proxy 10.200.0.2:18080]
 | `proton` (default) | Picks the lowest-load free Proton server different from the current one, swaps the WireGuard peer, restarts the session agent, verifies the new exit IP | Proton Free account (keyring), `wireguard` | Fastest exits, and the one this setup ran on for weeks. A free exit usually burns in under an hour under gateway load. |
 | `tor` | Sends `SIGNAL NEWNYM` to the Tor control port, verifies the exit IP changed (up to 3 attempts) | `tor` installed | The proxy chains through Tor's SOCKS port, so the gateway's traffic leaves through a Tor exit. Slower than Proton, and some providers block Tor exits, so treat it as a fallback, not the default. Tor also rate-limits NEWNYM, so a rotate can fail when asked too often; the watcher retries later. Verified with a real Tor daemon (bootstrap, NEWNYM exit change, one combos call HTTP 200). One caveat: the proxy runs inside the namespace and Tor runs on the host, so the host firewall must allow the FreeHop subnet to reach the host; a default-deny firewall (UFW INPUT DROP) blocks that connection and the tor method cannot run in the namespace until the allow exists. |
 | `proxy-pool` | Round-robin to the next upstream in `PROXY_POOL`, verifies the proxy still answers | Your own upstream proxies (`http://` or `socks5://`) | A dead entry fails the rotate and is skipped on the next attempt, because the pointer already advanced. The pool is yours to fill; FreeHop does not provide proxies. |
+| `warp` | Registers a fresh anonymous WARP device with wgcf, swaps the netns WireGuard peer to its profile, verifies the exit IPv6 /64 changed (up to 3 fresh registrations per rotate) | `wireguard`; wgcf is downloaded once on the first warp rotate (pinned release, SHA-256 verified) | The fresh address is the new IPv6 /64: the public IPv4 egress is Cloudflare's shared pool and may already be 429, so traffic must leave over IPv6. The old warp-cli daemon is not used by this method. See "Why Proton, not WARP" below for why the plain warp-cli path was not viable. |
 
 Not implemented on purpose:
 
-- **WARP.** Tested on this VPS, both shared Cloudflare egress IPs were already over the OpenCode free limit before anything was sent. See "Why Proton, not WARP" below.
-- **IPv6 /64 rotation.** Needs a host with an IPv6 /64 block. This VPS has no IPv6 at all (no global address, no IPv6 route), so the method cannot run here. If your host has one, the proxy already speaks SOCKS5 and HTTP upstreams, so a pool entry pointing at your IPv6 egress is the way to use it.
+- **IPv6 /64 rotation from a host /64.** Needs a host with an IPv6 /64 block. This VPS has no IPv6 at all (no global address, no IPv6 route), so the method cannot run here. The `warp` method above supplies its own /64 through the WARP tunnel instead. If your host has a native /64, the proxy already speaks SOCKS5 and HTTP upstreams, so a pool entry pointing at your IPv6 egress is the way to use it.
 - **Client-side lockout clearing.** The project this feature imitates also clears OpenCode's local lockout files (`drafts.sqlite`). FreeHop does not touch the gateway's local state; it only rotates the network exit and restarts the gateway through the configured hook.
 
 ## What it is not
@@ -54,6 +54,8 @@ Not implemented on purpose:
 
 We tested WARP first (Cloudflare's egress is what openhop hops). Both WARP exit IPs we tried were already over the OpenCode free limit before we sent anything: shared egress IPs are pre-burned for that tier, at least from a VPS. Proton Free exits are per-server and empirically still go clean after a rotate. WARP stays a fine idea on a desktop with a different IP pool; on this VPS it was not viable. Your mileage may vary, which is why the proxy is just a proxy: point it at any exit you trust.
 
+Correction (23 Nov 2026): the warp-cli client itself was never dead. Checked live, the daemon is Connected and its SOCKS proxy answers with a Cloudflare exit IP; what was pre-burned was that shared egress IP, not the tunnel. That is why the `warp` method does not use warp-cli at all: each rotate registers a fresh anonymous WARP device with wgcf, which gets a fresh IPv6 address, and the rotate verifies the exit IPv6 /64 changed. openhop proper does it differently again (it keeps one registration and runs `warp-cli tunnel rotate-keys` for a fresh /64); FreeHop uses fresh wgcf registrations because the warp-cli client here runs in MASQUE proxy mode on host loopback, unreachable from the netns without a forwarder, while a wgcf profile plugs straight into the netns WireGuard interface exactly like Proton. Whether a fresh registration really lands on a fresh /64 is verified on every rotate; if it ever does not, the method reports it instead of claiming a fresh exit.
+
 ## FAQ
 
 ### Doesn't 9Router already have proxy pools?
@@ -64,7 +66,7 @@ Yes. A proxy pool is a place to put proxies, not a source of fresh IPs. The Open
 
 - Linux (Ubuntu 24.04 / Debian 12 or newer), systemd, Python 3.10+
 - `iproute2`, `iptables`, `curl`
-- Per method: `proton` needs `wireguard` and a Proton Free account, logged in once with the official Proton VPN Linux client (that creates the keyring FreeHop reads; FreeHop never asks for your password). `tor` needs `tor` installed. `proxy-pool` needs your own upstream proxies.
+- Per method: `proton` needs `wireguard` and a Proton Free account, logged in once with the official Proton VPN Linux client (that creates the keyring FreeHop reads; FreeHop never asks for your password). `tor` needs `tor` installed. `proxy-pool` needs your own upstream proxies. `warp` needs `wireguard`; wgcf is downloaded once on the first warp rotate (pinned release, SHA-256 verified).
 - Passwordless sudo for `ip`, `wg`, `iptables` (see below)
 
 ## Install
@@ -93,7 +95,8 @@ Edit `~/.config/freehop/config`. The important knobs:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `EGRESS_METHOD` | `proton` | `proton`, `tor`, or `proxy-pool` (see Egress methods) |
+| `EGRESS_METHOD` | `proton` | `proton`, `tor`, `proxy-pool`, or `warp` (see Egress methods) |
+| `WARP_EXIT_IP6_URL` | `https://api64.ipify.org` | URL returning the caller's IPv6 as plain text, used to verify a warp rotate (warp only) |
 | `TOR_SOCKS_PORT` / `TOR_CONTROL` | `9050` / `127.0.0.1:9051` | Tor SOCKS and control ports (tor method only) |
 | `PROXY_POOL` | (empty) | comma-separated upstream proxies, `http://` or `socks5://` (proxy-pool only) |
 | `EXIT_IP_URL` | `https://api.ipify.org` | URL that returns the caller's IP as plain text, used to verify a rotate |
@@ -154,7 +157,7 @@ Give this to an AI agent to set FreeHop up on a machine. Fill in the gateway lin
 Set up FreeHop on this machine so my 9Router gateway keeps answering when the OpenCode free tier returns 429. This setup is built specifically for 9Router serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`); another gateway can reuse the same knobs with its own unit and test command.
 
 1. Read the skill file first and follow it exactly: skills/freehop/SKILL.md in the cloned repo (or https://github.com/Urdemonlord/freehop/blob/main/skills/freehop/SKILL.md if you have not cloned yet).
-2. Check the prerequisites and stop with the exact missing piece if one fails: Linux (Ubuntu 24.04 / Debian 12+), systemd, Python 3.10+, iproute2, iptables, curl; then the prerequisites for the configured EGRESS_METHOD (proton: wireguard plus a Proton Free account already logged in once with the official Proton VPN Linux client, which creates the keyring FreeHop reads; tor: tor installed; proxy-pool: PROXY_POOL set in the config); passwordless sudo for ip, wg, iptables (repo file sudoers/freehop).
+2. Check the prerequisites and stop with the exact missing piece if one fails: Linux (Ubuntu 24.04 / Debian 12+), systemd, Python 3.10+, iproute2, iptables, curl; then the prerequisites for the configured EGRESS_METHOD (proton: wireguard plus a Proton Free account already logged in once with the official Proton VPN Linux client, which creates the keyring FreeHop reads; tor: tor installed; proxy-pool: PROXY_POOL set in the config; warp: wireguard, wgcf is downloaded on the first warp rotate); passwordless sudo for ip, wg, iptables (repo file sudoers/freehop).
 3. Install non-interactively:
    git clone https://github.com/Urdemonlord/freehop.git
    cd freehop
@@ -210,4 +213,4 @@ A bold geometric F built from hop steps: top bar reaches further than the middle
 
 ## Credits
 
-Built from the live Proton/9Router setup that kept the Meow Labs Hermes gateway answering through November 2026, including the 86203 agent retry, the tunnel health check, and the WARP test that proved Proton stays. The multi-egress idea (rotate the exit through several transports, watch the log, resume the session) follows [Opencode-Unlimited-Limit-Bypass-](https://github.com/ShadowySphinX/Opencode-Unlimited-Limit-Bypass-) by ShadowySphinX, the project openhop is also based on; FreeHop implements the Proton, Tor, and proxy-pool transports for a server gateway, and deliberately does not copy its client-side lockout clearing. MIT licensed, see `LICENSE`.
+Built from the live Proton/9Router setup that kept the Meow Labs Hermes gateway answering through November 2026, including the 86203 agent retry, the tunnel health check, and the WARP test that proved Proton stays. The multi-egress idea (rotate the exit through several transports, watch the log, resume the session) follows [Opencode-Unlimited-Limit-Bypass-](https://github.com/ShadowySphinX/Opencode-Unlimited-Limit-Bypass-) by ShadowySphinX, the project openhop is also based on; FreeHop implements the Proton, Tor, proxy-pool, and WARP transports for a server gateway, and deliberately does not copy its client-side lockout clearing. MIT licensed, see `LICENSE`.

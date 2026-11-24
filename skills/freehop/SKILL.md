@@ -1,11 +1,11 @@
 ---
 name: freehop
-description: Keep a 9Router gateway serving the OpenCode provider's combos model alive by hopping exits when the free limit hits. Use when a gateway returns 429 FreeUsageLimitError, the tunnel is dead, or you need to check, rotate, or troubleshoot the exit. Egress methods: Proton WireGuard (default), Tor NEWNYM, or a proxy pool. Covers install, status, rotate, doctor, and troubleshooting. Does not cover general VPN use or other providers.
+description: Keep a 9Router gateway serving the OpenCode provider's combos model alive by hopping exits when the free limit hits. Use when a gateway returns 429 FreeUsageLimitError, the tunnel is dead, or you need to check, rotate, or troubleshoot the exit. Egress methods: Proton WireGuard (default), Tor NEWNYM, a proxy pool, or WARP (fresh wgcf device per rotate). Covers install, status, rotate, doctor, and troubleshooting. Does not cover general VPN use or other providers.
 ---
 
 # FreeHop
 
-FreeHop keeps a free-tier AI gateway answering by rotating exits. It is built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`). A scoped network namespace holds a forward proxy that routes only the gateway's traffic through the current exit, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. The 429 is detected by a direct endpoint probe (the gateway's HTTP status, 429 twice in a row) because neither journal logs it; journal grep alone is blind. Server-side, Linux only, no GUI. The exit comes from one of three methods, `EGRESS_METHOD` in the config: `proton` (WireGuard to a Proton Free server, default), `tor` (NEWNYM on the Tor control port, the proxy chains through Tor's SOCKS port), or `proxy-pool` (round-robin over your own `http://` or `socks5://` upstreams).
+FreeHop keeps a free-tier AI gateway answering by rotating exits. It is built for a 9Router gateway serving the OpenCode provider's `combos` model (`oc/deepseek-v4.1-flash-free`). A scoped network namespace holds a forward proxy that routes only the gateway's traffic through the current exit, and a watcher rotates the exit when the provider answers 429 or the tunnel dies. The 429 is detected by a direct endpoint probe (the gateway's HTTP status, 429 twice in a row) because neither journal logs it; journal grep alone is blind. Server-side, Linux only, no GUI. The exit comes from one of four methods, `EGRESS_METHOD` in the config: `proton` (WireGuard to a Proton Free server, default), `tor` (NEWNYM on the Tor control port, the proxy chains through Tor's SOCKS port), `proxy-pool` (round-robin over your own `http://` or `socks5://` upstreams), or `warp` (a fresh anonymous WARP device per rotate via wgcf, WireGuard peer in the netns; the fresh address is the new IPv6 /64, verified on every rotate).
 
 ## When to use it
 
@@ -23,7 +23,7 @@ FreeHop keeps a free-tier AI gateway answering by rotating exits. It is built fo
 ## Prerequisites
 
 - Linux (Ubuntu 24.04 / Debian 12+), systemd, Python 3.10+, `iproute2`, `iptables`, `curl`.
-- Per method: `proton` needs `wireguard` and a Proton Free account, logged in once with the official Proton VPN Linux client (that creates the keyring FreeHop reads). `tor` needs `tor` installed. `proxy-pool` needs `PROXY_POOL` set in the config.
+- Per method: `proton` needs `wireguard` and a Proton Free account, logged in once with the official Proton VPN Linux client (that creates the keyring FreeHop reads). `tor` needs `tor` installed. `proxy-pool` needs `PROXY_POOL` set in the config. `warp` needs `wireguard`; wgcf is downloaded once on the first warp rotate (pinned release, SHA-256 verified). A warp rotate registers a fresh anonymous WARP device (random keypair, no personal account); the old warp-cli daemon is not used by this method.
 - FreeHop never asks for a password and never prints credentials.
 - Passwordless sudo for `ip`, `wg`, `iptables` (repo file `sudoers/freehop`).
 
@@ -43,7 +43,8 @@ The installer checks tools, the prerequisites for the configured `EGRESS_METHOD`
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `EGRESS_METHOD` | `proton` | `proton`, `tor`, or `proxy-pool` |
+| `EGRESS_METHOD` | `proton` | `proton`, `tor`, `proxy-pool`, or `warp` |
+| `WARP_EXIT_IP6_URL` | `https://api64.ipify.org` | URL returning the caller's IPv6 as plain text, used to verify a warp rotate (warp only) |
 | `TOR_SOCKS_PORT` / `TOR_CONTROL` | `9050` / `127.0.0.1:9051` | Tor SOCKS and control ports (tor only) |
 | `PROXY_POOL` | (empty) | comma-separated upstreams, `http://` or `socks5://` (proxy-pool only) |
 | `EXIT_IP_URL` | `https://api.ipify.org` | URL returning the caller's IP as plain text, used to verify a rotate |
@@ -93,18 +94,20 @@ freehop setup | teardown          # build or remove the namespace
 `status --json` shape:
 
 ```json
-{"egress_method": "proton", "netns": "present", "wg_interface": "freehop0", "wg_endpoint": "1.2.3.4:51820", "wg_handshake": "recent", "exit_ip": "5.6.7.8", "upstream": "direct", "proxy": {"url": "http://10.200.0.2:18080", "http_code": "200"}, "units": {"proxy": "active", "watch_timer": "active"}, "last_rotate": {"server": "JP-FREE#25", "exit_ip": "5.6.7.8", "method": "proton"}}
+{"egress_method": "proton", "netns": "present", "wg_interface": "freehop0", "wg_endpoint": "1.2.3.4:51820", "wg_handshake": "recent", "exit_ip": "5.6.7.8", "exit_ip_source": "live", "upstream": "direct", "proxy": {"url": "http://10.200.0.2:18080", "http_code": "200"}, "units": {"proxy": "active", "watch_timer": "active"}, "last_rotate": {"server": "JP-FREE#25", "exit_ip": "5.6.7.8", "method": "proton"}}
 ```
+
+`exit_ip_source` is `"live"` when the exit-IP check answered through the proxy and `"cached"` when the live check stalled and status fell back to the last known exit from `rotate-state.json`; `exit_ip` itself always holds the current exit as best known. If no rotate has ever happened, `exit_ip` is empty with source `"live"`.
 
 `upstream` is `direct` for proton, `socks5:host:port` for tor, and `http:host:port` or `socks5:host:port` for proxy-pool. `wg_handshake` is `n/a` when the method is not proton.
 
 `doctor --json` shape: `{"checks": [{"name": "...", "ok": true, "hint": ""}], "ok": 14, "failed": 0}`. A failed check names its fix in `hint`. The checks run are the ones for the configured method.
 
-`rotate --json` shape: `{"method": "proton", "server": "JP-FREE#25", "exit_ip": "5.6.7.8", "rotated_at": 1793000000}`. With `--dry-run` the exit IP is `null` and nothing changes. For tor, `server` is `tor`; for proxy-pool, `server` is `proxy-pool` and the state also records `upstream`.
+`rotate --json` shape: `{"method": "proton", "server": "JP-FREE#25", "exit_ip": "5.6.7.8", "rotated_at": 1793000000}`. With `--dry-run` the exit IP is `null` and nothing changes. For tor, `server` is `tor`; for proxy-pool, `server` is `proxy-pool` and the state also records `upstream`. For warp, `server` is `warp` and the JSON also carries `exit_ip6` and `prefix64` (the fresh EGRESS IPv6 /64, in 2a09:bac5::/32, is the point of a warp rotate) plus `profile_prefix64` (the registration's own /64 in 2606:4700:110::/48; never equal to the egress /64, Cloudflare NATs egress).
 
 ## Workflows
 
-**Gateway returns 429.** Run `freehop doctor --json` first. If the tunnel checks pass, run `freehop rotate --json` once, then re-test the gateway. If the rotate succeeds but the gateway still answers 429, the new exit was already burned; rotate once more. Do not rotate in a loop: the budget is 6 per hour and 20 per day. For `tor`, a rotate can fail when NEWNYM is rate-limited; wait and let the watcher retry. For `proxy-pool`, a rotate that fails means the next upstream was dead; the pointer already advanced, so the next rotate tries the following one.
+**Gateway returns 429.** Run `freehop doctor --json` first. If the tunnel checks pass, run `freehop rotate --json` once, then re-test the gateway. If the rotate succeeds but the gateway still answers 429, the new exit was already burned; rotate once more. Do not rotate in a loop: the budget is 6 per hour and 20 per day. For `proton`, one rotate already tries up to 3 servers and only counts when the exit IP actually changed, so a successful rotate has a genuinely new exit; if it fails with "no server gave a new exit IP", every tried server handed out the same egress IP and the watcher retries on the next tick. For `tor`, a rotate can fail when NEWNYM is rate-limited; wait and let the watcher retry. For `proxy-pool`, a rotate that fails means the next upstream was dead; the pointer already advanced, so the next rotate tries the following one. For `warp`, one rotate already tries up to 3 fresh device registrations; if all three land on a burned /64, the rotate fails cleanly and the watcher retries on the next tick. A warp rotate that reports no IPv6 exit means traffic is not leaving over IPv6, so the fresh /64 cannot help; check the v6 default route before rotating again.
 
 **Tunnel dead.** `freehop status --json` shows the proxy unreachable and, for proton, `wg_handshake: none`. Run `freehop rotate --json`; the watcher would do this itself within 5 minutes, so a manual rotate is only needed when you cannot wait.
 
