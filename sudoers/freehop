@@ -3,4 +3,23 @@
 # NOTE: the `ip` binary is broad by necessity (netns, link, addr, route).
 # This grants the user root-level network configuration; only install it
 # on a machine you control, for a user you trust (yourself).
-%USER% ALL=(root) NOPASSWD: /usr/sbin/ip, /usr/sbin/iptables, /usr/bin/wg, /usr/sbin/sysctl -w net.ipv4.ip_forward=1, /usr/bin/pkill -f freehop-agent.py, /usr/bin/tee -a /etc/hosts, /usr/bin/tee /etc/netns/*/resolv.conf, /usr/bin/sed -i /# freehop-agent-scoped/d /etc/hosts
+#
+# Arch port (user savehex):
+#  * both /usr/bin and /usr/sbin paths granted (Arch merges /usr/sbin -> /usr/bin)
+#  * mkdir/rm/kill added (freehop-netns.sh uses them; upstream snippet omits them)
+#  * true/test added so the installer/doctor "passwordless sudo" probe works
+#  * the sed pattern's '#' is escaped (\#) -- an unescaped '#' makes sudoers
+#    treat the rest of the line as a comment and silently drop every grant
+#    after it. This is the bug that broke the upstream rule.
+savehex ALL=(root) NOPASSWD: \
+    /usr/bin/ip, /usr/sbin/ip, \
+    /usr/bin/iptables, /usr/sbin/iptables, \
+    /usr/bin/wg, /usr/sbin/wg, \
+    /usr/bin/sysctl -w net.ipv4.ip_forward=1, /usr/sbin/sysctl -w net.ipv4.ip_forward=1, \
+    /usr/bin/pkill -f freehop-agent.py, \
+    /usr/bin/tee -a /etc/hosts, \
+    /usr/bin/tee /etc/netns/*/resolv.conf, \
+    /usr/bin/mkdir -p /etc/netns/*, \
+    /usr/bin/rm -rf /etc/netns/*, \
+    /usr/bin/kill, /usr/bin/true, /usr/bin/test, \
+    /usr/bin/sed -i /\# freehop-agent-scoped/d /etc/hosts

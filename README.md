@@ -24,7 +24,7 @@ your gateway ──HTTP_PROXY──> [forward proxy 10.200.0.2:18080]
 
 - **Scoped tunnel.** The WireGuard interface lives in a network namespace with its own veth pair and NAT. Only traffic pointed at the proxy uses the VPN. The host keeps its normal connection, SSH stays put.
 - **Rotate on limit.** Every 5 minutes the watcher checks two things: the gateway's journal for the limit pattern (for example `FreeUsageLimitError`), and tunnel health (inside-ns egress and proxy egress, with a retest). Either one triggers a rotate, whose meaning depends on the egress method (below): a fresh Proton server, a new Tor circuit, or the next pool proxy.
-- **Rotate limits.** At most one rotate per 10 minutes, 6 per hour, 20 per day, and it stops after 3 consecutive failed runs. A free exit usually burns in under an hour under gateway load, so the budget matters.
+- **Rotate limits.** At most one rotate per 10 minutes, 6 per hour, 20 per day, and it stops after 3 consecutive failed runs. Every attempt counts against the budget, success or not, so an exit that stays burned cannot hammer the provider on every timer tick. A free exit usually burns in under an hour under gateway load, so the budget matters.
 - **After a rotate.** An optional hook runs (for example, restart your gateway so it drops its cached session), then an optional test command decides whether the gateway is back to 200.
 - **Survives reboots.** A boot unit rebuilds the namespace and picks a fresh exit. The old hand-built setup had no persistence; this one does.
 
@@ -135,6 +135,7 @@ FreeHop is built to be driven by an agent, not just a human at a terminal.
 - Every command takes `--json` and prints one JSON object; exit 0 means ok, 1 means failed, 2 means usage error.
 - All operations are idempotent and non-interactive. `install.sh --yes` never prompts.
 - `freehop doctor --json` is the first thing to run when something is wrong; each failed check names the fix.
+- `doctor` keeps `failed` (a broken install) separate from `warnings` (a temporarily burned exit). A burned exit is normal under gateway load and self-heals when the watcher rotates, so it warns instead of failing doctor.
 - Never print credentials. FreeHop never prints them either.
 
 ### Copy-paste setup prompt

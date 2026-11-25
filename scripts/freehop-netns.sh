@@ -36,8 +36,10 @@ derive_wg_key() {
   if [ -f "$KEY_FILE" ]; then return 0; fi
   mkdir -p "$STATE_DIR"
   python3 - "$KEYRING_GLOB" "$KEY_FILE" <<'PYEOF'
-import glob, json, os, sys
-sys.path.insert(0, "/usr/lib/python3/dist-packages")
+import glob, json, os, sys, sysconfig
+for _p in ("/usr/lib/python3/dist-packages", sysconfig.get_path("purelib")):
+    if _p and _p not in sys.path:
+        sys.path.insert(0, _p)
 from proton.vpn.session.credentials import VPNSecrets
 kf = sorted(glob.glob(sys.argv[1]))
 if not kf:
@@ -79,6 +81,16 @@ do_setup() {
   fi
   if ! sudo -n iptables -t nat -C POSTROUTING -s "$SUBNET" -o "$DEFAULT_IF" -j MASQUERADE 2>/dev/null; then
     sudo -n iptables -t nat -A POSTROUTING -s "$SUBNET" -o "$DEFAULT_IF" -j MASQUERADE
+  fi
+  # Docker sets the FORWARD policy to DROP. Without explicit accepts the
+  # namespace's packets are dropped at FORWARD and the tunnel never
+  # handshakes. Accept the FreeHop subnet both directions (targeted, so
+  # Docker's own rules are untouched).
+  if ! sudo -n iptables -C FORWARD -s "$SUBNET" -o "$DEFAULT_IF" -j ACCEPT 2>/dev/null; then
+    sudo -n iptables -I FORWARD 1 -s "$SUBNET" -o "$DEFAULT_IF" -j ACCEPT
+  fi
+  if ! sudo -n iptables -C FORWARD -d "$SUBNET" -i "$DEFAULT_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
+    sudo -n iptables -I FORWARD 1 -d "$SUBNET" -i "$DEFAULT_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
   fi
   sudo -n mkdir -p "/etc/netns/$NETNS"
   printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' | sudo -n tee "/etc/netns/$NETNS/resolv.conf" >/dev/null
@@ -139,6 +151,8 @@ do_teardown() {
   sudo -n ip link delete "$VETH_HOST" 2>/dev/null || true
   if [ -n "$DEFAULT_IF" ]; then
     sudo -n iptables -t nat -D POSTROUTING -s "$SUBNET" -o "$DEFAULT_IF" -j MASQUERADE 2>/dev/null || true
+    sudo -n iptables -D FORWARD -s "$SUBNET" -o "$DEFAULT_IF" -j ACCEPT 2>/dev/null || true
+    sudo -n iptables -D FORWARD -d "$SUBNET" -i "$DEFAULT_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
   fi
   sudo -n rm -rf "/etc/netns/$NETNS" 2>/dev/null || true
   sudo -n sed -i '/# freehop-agent-scoped/d' /etc/hosts 2>/dev/null || true

@@ -3,4 +3,8 @@ Description=Check free-tier limit and Proton tunnel health, rotate exit if neede
 
 [Service]
 Type=oneshot
+# The rotate step leaves the Proton session agent (freehop-agent.py) running
+# so the tunnel stays up. Only stop the watcher itself; do not tear down the
+# whole cgroup, or systemd would kill that agent after every check.
+KillMode=process
 ExecStart=/usr/bin/python3 %h/.local/share/freehop/src/freehop-watch.py

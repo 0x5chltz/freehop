@@ -127,7 +127,11 @@ def ensure_cert(kr):
             need = True
     if not need:
         return
-    sys.path.insert(0, "/usr/lib/python3/dist-packages")
+    # Arch port: try both Debian (dist-packages) and Arch (site-packages).
+    import sysconfig
+    for _p in ("/usr/lib/python3/dist-packages", sysconfig.get_path("purelib")):
+        if _p and _p not in sys.path:
+            sys.path.insert(0, _p)
     from proton.vpn.session.credentials import VPNSecrets
     priv = kr["vpn"]["secrets"]["ed25519_privatekey"]
     secrets = VPNSecrets.from_dict({"ed25519_privatekey": priv})
@@ -154,10 +158,21 @@ def start_agent(domain, attempts=3):
     # A failed attempt exits fast (AGENT ERROR in the log), so break the
     # wait early instead of burning the full 24s.
     last = ""
+    # The agent runs as root inside the namespace (sudo ip netns exec), where
+    # HOME is /root and "~/.config/Proton/..." does not exist. Pass HOME and
+    # the explicit keyring/cert paths so it finds the real account files.
+    home = os.path.expanduser("~")
     for attempt in range(1, attempts + 1):
         run("sudo -n pkill -f freehop-agent.py || true", check=False)
         time.sleep(2)
-        run(f"sudo -n ip netns exec {NETNS} nohup python3 {AGENT_PY} {domain} > {AGENT_LOG} 2>&1 &")
+        run(
+            "sudo -n ip netns exec {ns} nohup env HOME={home} "
+            "FREEHOP_KEYRING_GLOB='{kr}' FREEHOP_CERT_FILE='{cert}' "
+            "python3 {agent} {domain} > {log} 2>&1 &".format(
+                ns=NETNS, home=home, kr=KEYRING_GLOB, cert=CERT_FILE,
+                agent=AGENT_PY, domain=domain, log=AGENT_LOG,
+            )
+        )
         for i in range(12):
             time.sleep(2)
             try:

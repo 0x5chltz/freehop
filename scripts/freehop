@@ -76,14 +76,17 @@ cmd_status() {
   if [ -n "$LAST_SERVER" ]; then echo "last rotate: $LAST_SERVER $LAST_EXIT"; fi
 }
 
-# Doctor checks are recorded as name|ok|hint, then printed human or JSON.
+# Doctor checks are recorded as name|ok|hint|severity, then printed human or
+# JSON. severity "fail" (default) counts against the exit code; severity
+# "warn" is a non-fatal, self-healing condition (the current exit is burned),
+# reported but not fatal so infra health and exit burn stay separate.
 RESULTS=()
 check() {
-  local name="$1" cmd="$2" hint="$3"
+  local name="$1" cmd="$2" hint="$3" severity="${4:-fail}"
   if eval "$cmd" >/dev/null 2>&1; then
-    RESULTS+=("$name|1|")
+    RESULTS+=("$name|1||$severity")
   else
-    RESULTS+=("$name|0|$hint")
+    RESULTS+=("$name|0|$hint|$severity")
   fi
 }
 
@@ -100,10 +103,13 @@ cmd_doctor() {
   check "proxy egress" "curl -s -m 10 --noproxy '' -x http://$NS_IP:$PROXY_PORT -o /dev/null -w %{http_code} https://www.google.com/ | grep -qx 200" "check freehop-proxy.service, run: freehop logs"
   check "proxy unit active" "systemctl --user is-active -q freehop-proxy.service" "run: systemctl --user start freehop-proxy.service"
   check "watch timer active" "systemctl --user is-active -q freehop-watch.timer" "run: systemctl --user start freehop-watch.timer"
+  # State sanity: a last_rotate timestamp in the future (clock stepped back)
+  # freezes the watcher's min-interval gate. Same guard the watcher applies.
+  check "rotate state sane" "python3 -c \"import json,os,sys,time; p='$STATE_DIR/watch-state.json'; s=json.load(open(p)) if os.path.exists(p) else {}; sys.exit(0 if s.get('last_rotate',0) <= time.time() else 1)\"" "future last_rotate timestamp (clock stepped back); clears on the next watcher run"
   case "$EGRESS_METHOD" in
     proton)
       check "wg" "command -v wg" "install wireguard"
-      check "proton vpn library" "python3 -c \"import sys; sys.path.insert(0,'/usr/lib/python3/dist-packages'); import proton.vpn\"" "install the official Proton VPN Linux client"
+      check "proton vpn library" "python3 -c \"import sys,sysconfig; [sys.path.insert(0,p) for p in ('/usr/lib/python3/dist-packages',sysconfig.get_path('purelib')) if p and p not in sys.path]; import proton.vpn\"" "install the official Proton VPN Linux client"
       check "proton keyring present" "ls $KEYRING_GLOB >/dev/null 2>&1" "log in once with the Proton VPN client"
       check "certificate fetched" "test -f $STATE_DIR/cert.json" "run: freehop rotate"
       check "wg interface up" "sudo -n ip netns exec $NETNS ip link show $WG_IF 2>/dev/null | grep -q UP" "run: freehop setup"
@@ -123,25 +129,32 @@ cmd_doctor() {
       check "egress method" "false" "unknown EGRESS_METHOD: $EGRESS_METHOD (want proton, tor, or proxy-pool)"
       ;;
   esac
-  if [ -n "$TEST_CMD" ]; then check "test command" "$TEST_CMD" "check TEST_CMD in $CONFIG"; fi
-  local ok=0 fail=0
-  local r name isok hint
+  # The exit-usable probe spends one free message and fails whenever the
+  # current exit is burned. That is a normal, self-healing condition (the
+  # watcher rotates on it), not a broken install, so it warns, not fails.
+  if [ -n "$TEST_CMD" ]; then
+    check "exit usable (test command)" "$TEST_CMD" "current exit burned or gateway limited; the watcher rotates automatically, or run: freehop rotate" "warn"
+  fi
+  local ok=0 warn=0 fail=0
+  local name isok hint severity
   if [ "$json" -eq 1 ]; then
     printf '{"checks": ['
     local first=1
-    for r in "${RESULTS[@]}"; do
-      name="${r%%|*}"; rest="${r#*|}"; isok="${rest%%|*}"; hint="${rest#*|}"
-      [ "$isok" = "1" ] && ok=$((ok+1)) || fail=$((fail+1))
+    while IFS='|' read -r name isok hint severity; do
+      [ -n "$name" ] || continue
+      if [ "$isok" = "1" ]; then ok=$((ok+1)); elif [ "$severity" = "warn" ]; then warn=$((warn+1)); else fail=$((fail+1)); fi
       [ "$first" -eq 1 ] && first=0 || printf ', '
-      printf '{"name": %s, "ok": %s, "hint": %s}' "$(esc "$name")" "$([ "$isok" = "1" ] && echo true || echo false)" "$(esc "$hint")"
-    done
-    printf '], "ok": %s, "failed": %s}\n' "$ok" "$fail"
+      printf '{"name": %s, "ok": %s, "severity": %s, "hint": %s}' "$(esc "$name")" "$([ "$isok" = "1" ] && echo true || echo false)" "$(esc "$severity")" "$(esc "$hint")"
+    done < <(printf '%s\n' "${RESULTS[@]}")
+    printf '], "ok": %s, "warnings": %s, "failed": %s}\n' "$ok" "$warn" "$fail"
   else
-    for r in "${RESULTS[@]}"; do
-      name="${r%%|*}"; rest="${r#*|}"; isok="${rest%%|*}"; hint="${rest#*|}"
-      if [ "$isok" = "1" ]; then echo "[ok]   $name"; ok=$((ok+1)); else echo "[FAIL] $name ($hint)"; fail=$((fail+1)); fi
-    done
-    echo "doctor: $ok ok, $fail failed"
+    while IFS='|' read -r name isok hint severity; do
+      [ -n "$name" ] || continue
+      if [ "$isok" = "1" ]; then echo "[ok]   $name"; ok=$((ok+1))
+      elif [ "$severity" = "warn" ]; then echo "[warn] $name ($hint)"; warn=$((warn+1))
+      else echo "[FAIL] $name ($hint)"; fail=$((fail+1)); fi
+    done < <(printf '%s\n' "${RESULTS[@]}")
+    echo "doctor: $ok ok, $warn warning, $fail failed"
   fi
   [ "$fail" -eq 0 ]
 }

@@ -6,8 +6,11 @@ The WireGuard private key itself is derived from the same keyring by
 freehop-netns.sh setup; this agent only holds the session.
 Usage: freehop-agent.py [server-domain]
 """
-import asyncio, glob, json, os, sys
-sys.path.insert(0, "/usr/lib/python3/dist-packages")
+import asyncio, glob, json, os, sys, sysconfig
+# Arch port: try both Debian (dist-packages) and Arch (site-packages).
+for _p in ("/usr/lib/python3/dist-packages", sysconfig.get_path("purelib")):
+    if _p and _p not in sys.path:
+        sys.path.insert(0, _p)
 from proton.vpn.platform.local_agent import Listener
 from proton.vpn.session.credentials import VPNSecrets
 

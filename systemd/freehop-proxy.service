@@ -6,7 +6,7 @@ Wants=network-online.target freehop-setup.service
 [Service]
 Type=simple
 EnvironmentFile=%h/.config/freehop/config
-ExecStart=/usr/bin/sudo -n /usr/sbin/ip netns exec ${NETNS} /usr/bin/python3 %h/.local/share/freehop/src/freehop-proxy.py ${NS_IP} ${PROXY_PORT}
+ExecStart=/usr/bin/sudo -n /usr/sbin/ip netns exec ${NETNS} /usr/bin/env HOME=%h STATE_DIR=%h/.local/share/freehop /usr/bin/python3 %h/.local/share/freehop/src/freehop-proxy.py ${NS_IP} ${PROXY_PORT}
 Restart=always
 RestartSec=5
 

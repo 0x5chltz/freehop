@@ -88,7 +88,7 @@ freehop setup | teardown          # build or remove the namespace
 
 `upstream` is `direct` for proton, `socks5:host:port` for tor, and `http:host:port` or `socks5:host:port` for proxy-pool. `wg_handshake` is `n/a` when the method is not proton.
 
-`doctor --json` shape: `{"checks": [{"name": "...", "ok": true, "hint": ""}], "ok": 14, "failed": 0}`. A failed check names its fix in `hint`. The checks run are the ones for the configured method.
+`doctor --json` shape: `{"checks": [{"name": "...", "ok": true, "severity": "fail", "hint": ""}], "ok": 14, "warnings": 0, "failed": 0}`. A failed check names its fix in `hint`. `severity` is `fail` (counts against the exit code) or `warn` (a self-healing condition such as a burned exit; reported but never fatal), so infra health stays separate from a temporarily burned exit. The checks run are the ones for the configured method.
 
 `rotate --json` shape: `{"method": "proton", "server": "JP-FREE#25", "exit_ip": "5.6.7.8", "rotated_at": 1793000000}`. With `--dry-run` the exit IP is `null` and nothing changes. For tor, `server` is `tor`; for proxy-pool, `server` is `proxy-pool` and the state also records `upstream`.
 
@@ -98,7 +98,7 @@ freehop setup | teardown          # build or remove the namespace
 
 **Tunnel dead.** `freehop status --json` shows the proxy unreachable and, for proton, `wg_handshake: none`. Run `freehop rotate --json`; the watcher would do this itself within 5 minutes, so a manual rotate is only needed when you cannot wait.
 
-**Fresh install.** Run the installer, then `freehop doctor --json`. Every check must pass. If `certificate fetched` fails, run `freehop rotate` once.
+**Fresh install.** Run the installer, then `freehop doctor --json`. Every check must pass. A `warn` on the exit-usable probe (`current exit burned`) is normal right after a busy hour and self-heals when the watcher rotates; only `failed` counts block a clean install. If `certificate fetched` fails, run `freehop rotate` once.
 
 **After a reboot.** `freehop-setup.service` rebuilds the namespace and picks a fresh exit. Check `freehop status --json` before touching anything else.
 

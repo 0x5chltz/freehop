@@ -31,7 +31,7 @@ EGRESS_METHOD="${EGRESS_METHOD:-proton}"
 case "$EGRESS_METHOD" in
   proton)
     command -v wg >/dev/null 2>&1 || { echo "missing tool: wg (install wireguard)" >&2; exit 1; }
-    python3 -c "import sys; sys.path.insert(0,'/usr/lib/python3/dist-packages'); import proton.vpn" 2>/dev/null \
+    python3 -c "import sys,sysconfig; [sys.path.insert(0,p) for p in ('/usr/lib/python3/dist-packages',sysconfig.get_path('purelib')) if p and p not in sys.path]; import proton.vpn" 2>/dev/null \
       || { echo "proton vpn python library not found. Install the official Proton VPN Linux client first." >&2; exit 1; }
     KEYRING_GLOB="$HOME/.config/Proton/keyring-proton-sso-account-*.json"
     ls $KEYRING_GLOB >/dev/null 2>&1 \
