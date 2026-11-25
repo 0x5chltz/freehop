@@ -6,6 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v0.7.0-blue.svg)](CHANGELOG.md)
+[![M8ven Score](https://m8ven.ai/badge/mcp/urdemonlord-freehop-wzsaqj?v=ff1a054d5ade1025bfbb53ca24abd5de)](https://m8ven.ai/mcp/urdemonlord-freehop-wzsaqj?s=readme)
 
 Keep a free-tier AI gateway alive by hopping Proton VPN exits when the free limit hits.
 
